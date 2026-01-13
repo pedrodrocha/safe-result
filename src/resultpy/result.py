@@ -8,8 +8,10 @@ from typing import (
     overload,
     Optional,
     Union,
+    Coroutine,
 )
 from abc import ABC, abstractmethod
+import asyncio
 
 """
 Type variable for a generic type A
@@ -79,38 +81,24 @@ class Result(Generic[A, E], ABC):
         return Err(value)
 
     @abstractmethod
-    def is_ok(self) -> bool:
-        """Returns True if this is an Ok result."""
-        ...
+    def is_ok(self) -> bool: ...
 
     @abstractmethod
-    def is_err(self) -> bool:
-        """Returns True if this is an Err result."""
-        ...
+    def is_err(self) -> bool: ...
 
     @abstractmethod
-    def unwrap(self, message: Optional[str] = None) -> Union[A, object] | Never:
-        """
-        Unwraps the success value.
-
-        Returns
-        -------
-        A
-            Success value.
-        """
-        ...
+    def unwrap(self, message: Optional[str] = None) -> Union[A, object] | Never: ...
 
     @abstractmethod
-    def unwrap_or(self, fallback: B) -> Union[A, B]:
-        """
-        Unwraps the success value or returns the default value.
+    def unwrap_or(self, fallback: B) -> Union[A, B]: ...
 
-        Returns
-        -------
-        A
-            Success value or default value.
-        """
-        ...
+    @abstractmethod
+    def tap(self, fn: Callable[[A], None]) -> "Result[A, E]": ...
+
+    @abstractmethod
+    async def tap_async(
+        self, fn: Callable[[A], Coroutine[None, None, None]]
+    ) -> "Result[A, E]": ...
 
 
 class Ok(Result[A, E]):
@@ -226,6 +214,37 @@ class Ok(Result[A, E]):
             Success value or default value.
         """
         return self.value
+
+    def tap(self, fn: Callable[[A], None]) -> "Ok[A, E]":
+        """
+        Runs side effect, returns self.
+
+        Parameters
+        ----------
+        fn : Callable[[A], None]
+            Side effect function.
+
+        Returns
+        -------
+        Ok[A, E]
+            Self with side effect applied.
+        """
+        fn(self.value)
+        return self
+
+    async def tap_async(
+        self, fn: Callable[[A], Coroutine[None, None, None]]
+    ) -> "Ok[A, E]":
+        """
+        Runs side effect, returns self.
+
+        Parameters
+        ----------
+        fn : Callable[[A], Coroutine[None, None, None]]
+            Side effect function.
+        """
+        asyncio.run(fn(self.value))
+        return self
 
     def is_ok(self) -> bool:
         return True
@@ -361,6 +380,35 @@ class Err(Result[A, E]):
             Error value or default value.
         """
         return fallback
+
+    def tap(self, fn: Callable[[A], None]) -> "Err[A, E]":
+        """
+        No-op for Err. Returns self.
+
+        Parameters
+        ----------
+        fn : Callable[[A], None]
+            Side effect function (ignored, never called).
+
+        Returns
+        -------
+        Err[A, E]
+            Self unchanged.
+        """
+        return self
+
+    async def tap_async(
+        self, fn: Callable[[A], Coroutine[None, None, None]]
+    ) -> "Err[A, E]":
+        """
+        No-op for Err. Returns self.
+
+        Parameters
+        ----------
+        fn : Callable[[A], Coroutine[None, None, None]]
+            Side effect function (ignored, never called).
+        """
+        return self
 
     def is_ok(self) -> bool:
         return False
