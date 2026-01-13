@@ -822,3 +822,33 @@ def and_then_async(
             cast(Callable[[A], Coroutine[None, None, Result[B, E]]], fn)
         ),
     )
+
+
+@overload
+def match(result: Result[A, E], handlers: Matcher[A, B, E, B]) -> B: ...
+
+
+@overload
+def match(
+    result: Matcher[A, B, E, B],
+) -> Callable[[Result[A, E]], B]: ...
+
+
+def match(
+    result: Result[A, E] | Matcher[A, B, E, B],
+    handlers: Matcher[A, B, E, B] | None = None,
+) -> B | Callable[[Result[A, E]], B]:
+    """
+    Pattern match on a Result, handling both Ok and Err cases.
+
+    Supports both DataFirst and DataLast calling patterns.
+
+    Examples
+    --------
+    >>> match(Ok(2), {"ok": lambda x: x * 2, "err": lambda e: 0})  # 4 - DataFirst
+    >>> match({"ok": lambda x: x * 2, "err": lambda e: 0})(Ok(2))  # 4 - DataLast
+    """
+    if handlers is None:
+        _handlers = cast(Matcher[A, B, E, B], result)
+        return lambda r: r.match(_handlers)
+    return cast(Result[A, E], result).match(handlers)

@@ -12,6 +12,7 @@ from .result import (
     unwrap,
     and_then,
     and_then_async,
+    match,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "unwrap",
     "and_then",
     "and_then_async",
+    "match",
 ]

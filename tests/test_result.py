@@ -10,6 +10,7 @@ from resultpy import (
     unwrap,
     and_then,
     and_then_async,
+    match,
 )
 import pytest
 
@@ -563,9 +564,63 @@ class TestResult:
     class TestMatch:
         def test_matches_ok(self) -> None:
 
-            result = Ok[int, Never](42).match({"ok": lambda x: x * 2, "err": lambda e: e.upper()})
+            result = Ok[int, Never](42).match(
+                {"ok": lambda x: x * 2, "err": lambda e: e.upper()}
+            )
             assert result == 84
 
         def test_matches_err(self) -> None:
-            result = Err[Never, str]("error").match({"ok": lambda x: x * 2, "err": lambda e: e.upper()})
+            result = Err[Never, str]("error").match(
+                {"ok": lambda x: x * 2, "err": lambda e: e.upper()}
+            )
             assert result == "ERROR"
+
+    class TestMatchTopLevel:
+        def test_data_first_matches_ok(self) -> None:
+            ok: Ok[int, str] = Ok(42)
+            result = match(ok, {"ok": lambda x: x * 2, "err": lambda e: 0})
+            assert result == 84
+
+        def test_data_first_matches_err(self) -> None:
+            err: Err[int, str] = Err("error")
+            result = match(err, {"ok": lambda x: 0, "err": lambda e: len(e)})
+            assert result == 5
+
+        def test_data_first_matches_error_object(self) -> None:
+            err: Err[int, ValueError] = Err(ValueError("error"))
+            result = match(err, {"ok": lambda x: "", "err": lambda e: str(e).upper()})
+            assert result == "ERROR"
+
+        def test_data_last_returns_callable(self) -> None:
+            def double(x: int) -> int:
+                return x * 2
+
+            def default(e: str) -> int:
+                return 0
+
+            matcher = match({"ok": double, "err": default})
+            ok: Ok[int, str] = Ok(21)
+            result = matcher(ok)
+            assert result == 42
+
+        def test_data_last_matches_err(self) -> None:
+            def default(x: int) -> int:
+                return 0
+
+            def err_len(e: str) -> int:
+                return len(e)
+
+            matcher = match({"ok": default, "err": err_len})
+            err: Err[int, str] = Err("hello")
+            result = matcher(err)
+            assert result == 5
+
+        def test_both_handlers_return_same_type(self) -> None:
+            ok: Ok[int, str] = Ok(10)
+            err: Err[int, str] = Err("error")
+
+            result_ok = match(ok, {"ok": lambda x: str(x), "err": lambda e: e})
+            result_err = match(err, {"ok": lambda x: str(x), "err": lambda e: e})
+
+            assert result_ok == "10"
+            assert result_err == "error"
