@@ -342,3 +342,18 @@ class TestResult:
                 called is False
             )  # Function should NOT be called when starting with Err
             assert result.is_err()
+
+    class TestUnwrapErr:
+        def test_returns_error_for_err(self) -> None:
+            err: Err[int, str] = Err("Error message")
+            assert err.unwrap_err() == "Error message"
+
+        def test_raises_exception_for_ok(self) -> None:
+            ok: Ok[int, str] = Ok(42)
+            with pytest.raises(Exception):
+                ok.unwrap_err()
+
+        def test_raises_exception_for_ok_with_message(self) -> None:
+            ok: Ok[int, str] = Ok(42)
+            with pytest.raises(Exception, match="Expected an error"):
+                ok.unwrap_err("Expected an error")

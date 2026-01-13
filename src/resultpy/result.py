@@ -98,6 +98,9 @@ class Result(Generic[A, E], ABC):
     def unwrap_or(self, fallback: B) -> Union[A, B]: ...
 
     @abstractmethod
+    def unwrap_err(self, message: Optional[str] = None) -> E: ...
+
+    @abstractmethod
     def tap(self, fn: Callable[[A], None]) -> "Result[A, E]": ...
 
     @abstractmethod
@@ -208,6 +211,22 @@ class Ok(Result[A, E]):
             Success value or default value.
         """
         return self.value
+
+    def unwrap_err(self, message: Optional[str] = None) -> Never:
+        """
+        Raises because Ok has no error value.
+
+        Raises
+        ------
+        Exception
+            Always raises.
+
+        Examples
+        --------
+        >>> ok = Ok(42)
+        >>> ok.unwrap_err()  # raises Exception
+        """
+        raise Exception(message or f"unwrap_err called on Ok: {self.value!r}")
 
     def tap(self, fn: Callable[[A], None]) -> "Ok[A, E]":
         """
@@ -388,6 +407,28 @@ class Err(Result[A, E]):
             Error value or default value.
         """
         return fallback
+
+    def unwrap_err(self, message: Optional[str] = None) -> E:
+        """
+        Extracts the error value.
+
+        Parameters
+        ----------
+        message : Optional[str]
+            Unused (for API symmetry with Ok.unwrap_err).
+
+        Returns
+        -------
+        E
+            The error value.
+
+        Examples
+        --------
+        >>> err = Err("failed")
+        >>> err.unwrap_err()
+        'failed'
+        """
+        return self.value
 
     def tap(self, fn: Callable[[A], None]) -> "Err[A, E]":
         """
