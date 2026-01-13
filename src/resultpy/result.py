@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Literal, Callable, cast
+from typing import TypeVar, Generic, Literal, Callable, cast, Never, overload
 from abc import ABC, abstractmethod
 
 """
@@ -17,44 +17,95 @@ Type variable for a generic error type E
 E = TypeVar("E")
 
 """
-type variable for a transformed generic error type F
+Type variable for a transformed generic error type F
 """
 F = TypeVar("F")
 
 
 class Result(Generic[A, E], ABC):
-    __slots__ = ("status", "value")
-    status: Literal["ok", "err"]
+    """
+    Base class and namespace for Result types.
+
+    Use Result[A, E] in type annotations.
+    Use Result.ok(), Result.err(), Result.map() for utilities.
+
+    Examples
+    --------
+    >>> def parse(s: str) -> Result[int, str]:
+    ...     try:
+    ...         return Result.ok(int(s))
+    ...     except:
+    ...         return Result.err(f"Invalid: {s}")
+    """
+
+    __slots__ = ()
+
+    @property
+    @abstractmethod
+    def status(self) -> Literal["ok", "err"]:
+        """Returns 'ok' or 'err'."""
+        ...
 
     @staticmethod
-    def ok(value: A) -> "Ok[A, E]":
+    def ok(value: A) -> "Ok[A, Never]":
+        """
+        Creates successful result.
+
+        Examples
+        --------
+        >>> Result.ok(42)  # Ok(42)
+        """
         return Ok(value)
 
     @staticmethod
-    def err(value: E) -> "Err[A, E]":
+    def err(value: E) -> "Err[Never, E]":
+        """
+        Creates error result.
+
+        Examples
+        --------
+        >>> Result.err("failed")  # Err("failed")
+        """
         return Err(value)
 
+    @abstractmethod
     def is_ok(self) -> bool:
-        return self.status == "ok"
+        """Returns True if this is an Ok result."""
+        ...
 
+    @abstractmethod
     def is_err(self) -> bool:
-        return self.status == "err"
-
-    @abstractmethod
-    def map(self, fn: Callable[[A], B]) -> "Result[B, E]": ...
-
-    @abstractmethod
-    def mapErr(self, fn: Callable[[E], F]) -> "Result[A, F]": ...
+        """Returns True if this is an Err result."""
+        ...
 
 
 class Ok(Result[A, E]):
+    """
+    Successful result variant.
+
+    Parameters
+    ----------
+    A : TypeVar
+        Success value type.
+    E : TypeVar
+        Error type (phantom - for type unification).
+
+    Examples
+    --------
+    >>> result = Ok(42)
+    >>> result.value  # 42
+    >>> result.status  # "ok"
+    """
+
     __slots__ = ("value",)
     __match_args__ = ("value",)
 
-    status = "ok"
-
     def __init__(self, value: A) -> None:
         self.value: A = value
+
+    @property
+    def status(self) -> Literal["ok"]:
+        return "ok"
 
     def map(self, fn: Callable[[A], B]) -> "Ok[B, E]":
         """
@@ -109,6 +160,12 @@ class Ok(Result[A, E]):
         # SAFETY: E is phantom on Ok (not used at runtime).
         return cast("Ok[A, F]", self)
 
+    def is_ok(self) -> bool:
+        return True
+
+    def is_err(self) -> bool:
+        return False
+
     def __repr__(self) -> str:
         return f"Ok({self.value!r})"
 
@@ -122,16 +179,32 @@ class Ok(Result[A, E]):
 
 
 class Err(Result[A, E]):
+    """
+    Error result variant.
+
+    Parameters
+    ----------
+    A : TypeVar
+        Success type (phantom - for type unification with Ok).
+    E : TypeVar
+        Error value type.
+
+    Examples
+    --------
+    >>> result = Err("failed")
+    >>> result.value  # "failed"
+    >>> result.status  # "err"
+    """
+
     __slots__ = ("value",)
     __match_args__ = ("value",)
-
-    status = "err"
 
     def __init__(self, value: E) -> None:
         self.value: E = value
 
-    def __repr__(self) -> str:
-        return f"Err({self.value!r})"
+    @property
+    def status(self) -> Literal["err"]:
+        return "err"
 
     def map(self, fn: Callable[[A], B]) -> "Err[B, E]":
         """
@@ -186,6 +259,15 @@ class Err(Result[A, E]):
         """
         return Err(fn(self.value))
 
+    def is_ok(self) -> bool:
+        return False
+
+    def is_err(self) -> bool:
+        return True
+
+    def __repr__(self) -> str:
+        return f"Err({self.value!r})"
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Err):
             return False
@@ -193,3 +275,57 @@ class Err(Result[A, E]):
 
     def __hash__(self) -> int:
         return hash(("err", self.value))
+
+
+# Module-level dual functions for map and map_err
+# These support both DataFirst and DataLast calling patterns:
+#   map(result, fn)  -> DataFirst
+#   map(fn)(result)  -> DataLast
+
+
+@overload
+def map(result: Result[A, E], fn: Callable[[A], B]) -> Result[B, E]: ...
+
+
+@overload
+def map(fn: Callable[[A], B]) -> Callable[[Result[A, E]], Result[B, E]]: ...
+
+
+def map(result_or_fn, fn=None):  # type: ignore[misc]
+    """
+    Transforms success value, passes error through.
+
+    Supports both DataFirst and DataLast calling patterns.
+
+    Examples
+    --------
+    >>> map(Ok(2), lambda x: x * 2)  # Ok(4) - DataFirst
+    >>> map(lambda x: x * 2)(Ok(2))  # Ok(4) - DataLast
+    """
+    if fn is None:
+        return lambda r: r.map(result_or_fn)
+    return result_or_fn.map(fn)
+
+
+@overload
+def map_err(result: Result[A, E], fn: Callable[[E], F]) -> Result[A, F]: ...
+
+
+@overload
+def map_err(fn: Callable[[E], F]) -> Callable[[Result[A, E]], Result[A, F]]: ...
+
+
+def map_err(result_or_fn, fn=None):  # type: ignore[misc]
+    """
+    Transforms error value, passes success through.
+
+    Supports both DataFirst and DataLast calling patterns.
+
+    Examples
+    --------
+    >>> map_err(Err("fail"), lambda e: e.upper())  # Err("FAIL") - DataFirst
+    >>> map_err(lambda e: e.upper())(Err("fail"))  # Err("FAIL") - DataLast
+    """
+    if fn is None:
+        return lambda r: r.mapErr(result_or_fn)
+    return result_or_fn.mapErr(fn)

@@ -1,4 +1,4 @@
-from resultpy import Result, Ok, Err
+from resultpy import Result, Ok, Err, map, map_err
 
 
 class TestResult:
@@ -72,6 +72,15 @@ class TestResult:
             assert result.is_err() is True
             assert isinstance(mapped, Err)
             assert mapped.value == "fail"
+
+        def test_standalone_function_data_first_pattern(self):
+            result = map(Result.ok(3), lambda x: x + 4)
+            assert result.value == 7
+
+        def test_standalone_function_data_last_pattern(self):
+            add_four = map(lambda x: x + 4)
+            result = add_four(Result.ok(6))
+            assert result.value == 10
 
     class TestIsOk:
         def test_returns_true_for_ok(self):
