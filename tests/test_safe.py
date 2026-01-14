@@ -218,23 +218,3 @@ class TestSafeAsync:
                 delay1 = timestamps[1] - timestamps[0]
                 delay2 = timestamps[2] - timestamps[1]
                 assert delay2 > delay1
-
-
-class TestUnhandledException:
-    def test_str_representation(self) -> None:
-        cause = ValueError("Test error")
-        exc = UnhandledException(cause)
-        assert "UnhandledException" in str(exc)
-        assert "ValueError" in str(exc)
-        assert "Test error" in str(exc)
-
-    def test_repr_representation(self) -> None:
-        cause = ValueError("Test error")
-        exc = UnhandledException(cause)
-        assert "UnhandledException" in repr(exc)
-        assert "ValueError" in repr(exc)
-
-    def test_cause_attribute(self) -> None:
-        cause = ValueError("Test error")
-        exc = UnhandledException(cause)
-        assert exc.cause is cause

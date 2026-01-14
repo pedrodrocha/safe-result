@@ -20,11 +20,11 @@ class TaggedError(ABC, Exception):
 
     @property
     @abstractmethod
-    def _tag(self) -> str: ...
+    def tag(self) -> str: ...
 
     @property
     def message(self) -> str:
-        return self.message
+        return self._message
 
     def __init__(self, message: str, cause: Optional[Exception] = None) -> None:
         super().__init__(message)
@@ -91,7 +91,7 @@ class TaggedError(ABC, Exception):
         ValueError
             If no handler exists for the error's _tag.
         """
-        tag = error._tag
+        tag = error.tag
         handler = handlers.get(tag)
         if handler is None:
             raise ValueError(f"No handler for error tag: {tag}")
@@ -127,7 +127,7 @@ class TaggedError(ABC, Exception):
         ...     "ValidationError": lambda e: f"Invalid: {e.field}",
         ... }, lambda e: f"Unknown error: {e.message}")
         """
-        tag = error._tag
+        tag = error.tag
         handler = handlers.get(tag)
         if handler is None:
             return otherwise(error)
@@ -136,7 +136,7 @@ class TaggedError(ABC, Exception):
 
 class UnhandledException(TaggedError):
     @property
-    def _tag(self) -> str:
+    def tag(self) -> str:
         return "UnhandledException"
 
     @property
