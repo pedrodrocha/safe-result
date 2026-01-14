@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, TypeVar, Dict, Callable, Mapping
+from typing import Optional, TypeVar, Dict, Callable, Mapping, Union
 
 """
 Type variable for a generic result type A
@@ -16,11 +16,17 @@ Type variable for an alternative generic error type F bounded to TaggedError
 """
 F = TypeVar("F", bound="TaggedError")
 
+"""
+Sentinel value for indicating that a non-exception cause has not been set
+"""
+_NOT_SET = object()
+
 
 class TaggedError(ABC, Exception):
-    __slots__ = ("_message",)
+    __slots__ = ("_message", "_non_exception_cause")
 
     _message: str
+    _non_exception_cause: Optional[object]
 
     @property
     @abstractmethod
@@ -30,14 +36,33 @@ class TaggedError(ABC, Exception):
     def message(self) -> str:
         return self._message
 
-    def __init__(self, message: str, cause: Optional[Exception] = None) -> None:
+    def __init__(self, message: str, cause: Optional[object] = None) -> None:
         super().__init__(message)
         self._message = message
-        if cause is not None:
+        if isinstance(cause, BaseException):
+            self._non_exception_cause = _NOT_SET
             self.__cause__ = cause  # Python's built-in cause chaining
+        else:
+            self._non_exception_cause = "None" if cause is None else cause
+            self.__cause__ = None
+
+    def __getattribute__(self, name: str) -> Union[BaseException, None, object]:
+        """
+        Override __getattribute__ to handle non-exception causes.
+        """
+        if name == "__cause__":
+            try:
+                non_exception_cause = object.__getattribute__(
+                    self, "_non_exception_cause"
+                )
+                if non_exception_cause is not _NOT_SET:
+                    return non_exception_cause
+            except AttributeError:
+                pass
+        return object.__getattribute__(self, name)
 
     def __str__(self) -> str:
-        return self._message  # Simple, no "Caused by:" appended
+        return self._message
 
     @staticmethod
     def is_error(value: object) -> bool:
@@ -134,6 +159,6 @@ class UnhandledException(TaggedError):
     def tag(self) -> str:
         return "UnhandledException"
 
-    def __init__(self, cause: Exception) -> None:
+    def __init__(self, cause: object) -> None:
         message = f"Unhandled exception: {cause}"
         super().__init__(message, cause)
