@@ -56,13 +56,9 @@ class TaggedError(ABC, Exception):
         Type guard for TaggedError instances.
         Example:
             if TaggedError.is_tagged_error(value):
-                print(value._tag)
+                print(value.tag)
         """
-        return (
-            isinstance(value, Exception)
-            and hasattr(value, "_tag")
-            and isinstance(getattr(value, "_tag"), str)
-        )
+        return isinstance(value, Exception) and isinstance(value, TaggedError)
 
     @staticmethod
     def match[A](

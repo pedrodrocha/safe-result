@@ -38,7 +38,20 @@ class NetworkError(TaggedError):
         super().__init__(f"Network error: {url}")
 
 
-AppError: TypeAlias = Union[NotFoundError, ValidationError, NetworkError]
+class NotHandledError(TaggedError):
+    __slots__ = ()
+
+    @property
+    def tag(self) -> str:
+        return "NotHandledError"
+
+    def __init__(self) -> None:
+        super().__init__("Not handled")
+
+
+AppError: TypeAlias = Union[
+    NotFoundError, ValidationError, NetworkError, NotHandledError
+]
 
 
 def handle_not_found(e: NotFoundError) -> str:
@@ -61,6 +74,22 @@ def match_app_error(error: AppError) -> str:
             ValidationError: handle_validation,
             NetworkError: handle_network,
         },
+    )
+
+
+def handle_otherwise(e: AppError) -> str:
+    return f"Unknown error: {e.message}"
+
+
+def match_app_error_partial(error: TaggedError) -> str:
+    return TaggedError.match_partial(
+        error,
+        {
+            "NotFoundError": handle_not_found,
+            "ValidationError": handle_validation,
+            "NetworkError": handle_network,
+        },
+        handle_otherwise,
     )
 
 
@@ -141,4 +170,41 @@ class TestTaggedError:
             assert not TaggedError.is_tagged_error("test")
 
     class TestMatch:
-        pass
+        def test_matches_not_found_error(self) -> None:
+            error = NotFoundError("123")
+            assert match_app_error(error) == "Not found: 123"
+
+        def test_matches_validation_error(self) -> None:
+            error = ValidationError("name")
+            assert match_app_error(error) == "Invalid field: name"
+
+        def test_matches_network_error(self) -> None:
+            error = NetworkError("https://example.com")
+            assert match_app_error(error) == "Network error: https://example.com"
+
+    class TestMatchPartial:
+        def test_matches_not_found_error(self) -> None:
+            error = NotFoundError("123")
+            assert match_app_error(error) == "Not found: 123"
+
+        def test_matches_validation_error(self) -> None:
+            error = ValidationError("name")
+            assert match_app_error(error) == "Invalid field: name"
+
+        def test_matches_network_error(self) -> None:
+            error = NetworkError("https://example.com")
+            assert match_app_error(error) == "Network error: https://example.com"
+
+        def test_falls_back_for_unhandled_tag(self) -> None:
+            class NotHandledError(TaggedError):
+                __slots__ = ()
+
+                @property
+                def tag(self) -> str:
+                    return "NotHandledError"
+
+                def __init__(self) -> None:
+                    super().__init__("Not handled")
+
+            error = NotHandledError()
+            assert match_app_error_partial(error) == "Unknown error: Not handled"
