@@ -93,9 +93,9 @@ result_map(lambda x: x + 1)(result)  # Pipeable
 ## Handling Errors
 
 ```python
-from resultpy import Result, Err, TaggedError
+from resultpy import Result, TaggedError
 
-err_result: Result[int, ValueError] = Err[int, ValueError](ValueError("invalid"))
+err_result: Result[int, ValueError] = Result.err(ValueError("invalid"))
 
 # Transform errors
 err_result.map_err(lambda e: RuntimeError(str(e)))  # Err(RuntimeError(...))
@@ -229,8 +229,8 @@ def handle_not_found_error(e: NotFoundError) -> Result[dict[str, str], NotFoundE
 result_exhaustive = TaggedError.match(
     result_err.unwrap_err(),
     {
-        ValidationError: handle_validation_error,
-        NotFoundError: handle_not_found_error,
+        "ValidationError": handle_validation_error,
+        "NotFoundError": handle_not_found_error,
     }
 )
 
@@ -312,8 +312,8 @@ result_partial = TaggedError.match_partial(
 |--------|-------------|
 | `TaggedError.is_error(value)` | Type guard for Exception instances |
 | `TaggedError.is_tagged_error(value)` | Type guard for TaggedError instances |
-| `TaggedError.match(error, handlers)` | Exhaustive match by error class |
-| `TaggedError.match_partial(error, handlers, otherwise)` | Partial match by tag with fallback |
+| `TaggedError.match(error, handlers)` | Exhaustive match by tag string |
+| `TaggedError.match_partial(error, handlers, otherwise)` | Partial match by tag string with fallback |
 | `.tag` | Property: error tag string |
 | `.message` | Property: error message |
 

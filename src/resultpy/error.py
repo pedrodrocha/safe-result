@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, TypeVar, Dict, Callable, Mapping, Union
+from typing import Optional, TypeVar, Dict, Callable, Union
 
 """
 Type variable for a generic result type A
@@ -151,10 +151,10 @@ class TaggedError(ABC, Exception):
     @staticmethod
     def match[A](
         error: "TaggedError",
-        handlers: Mapping[type["TaggedError"], Callable[..., A]],
+        handlers: Dict[str, Callable[..., A]],
     ) -> A:
         """
-        Matches by concrete error class.
+        Exhaustive pattern match on tagged error by tag string.
 
         Handlers can accept the specific error type (e.g., NotFoundError)
         and will receive an instance of that type at runtime.
@@ -163,8 +163,8 @@ class TaggedError(ABC, Exception):
         ----------
         error : TaggedError
             Error to match.
-        handlers : Mapping[type[TaggedError], Callable[..., A]]
-            Mapping from error class to handler function.
+        handlers : Dict[str, Callable[..., A]]
+            Dictionary mapping tag string to handler function.
             Handlers can accept the specific error type (e.g., NotFoundError)
             and will receive an instance of that type at runtime.
 
@@ -176,7 +176,7 @@ class TaggedError(ABC, Exception):
         Raises
         ------
         ValueError
-            If no handler is found for the error type.
+            If no handler is found for the error's tag.
 
         Examples
         --------
@@ -188,23 +188,16 @@ class TaggedError(ABC, Exception):
         ...         self.id = id
         >>> def handle_not_found(e: NotFoundError) -> str:
         ...     return f"Missing: {e.id}"
-        >>> TaggedError.match(NotFoundError("123"), {NotFoundError: handle_not_found})
+        >>> TaggedError.match(NotFoundError("123"), {"NotFoundError": handle_not_found})
         'Missing: 123'
         """
-        error_type = type(error)
-        for cls in error_type.__mro__:
-            handler = handlers.get(cls)
-            if handler is not None:
-                # At runtime, error is guaranteed to be an instance of cls
-                # We verify this with isinstance for runtime safety
-                if not isinstance(error, cls):
-                    raise TypeError(
-                        f"Expected {cls.__name__}, got {error_type.__name__}"
-                    )
-                # Callable[..., A] accepts any arguments, so we can pass error directly
-                # The runtime guarantee ensures the handler receives the correct type
-                return handler(error)
-        raise ValueError(f"No handler for error type {error_type.__name__}")
+        tag = error.tag
+        handler = handlers.get(tag)
+        if handler is None:
+            raise ValueError(f"No handler for error tag: {tag}")
+        # Callable[..., A] accepts any arguments, so we can pass error directly
+        # The runtime guarantee ensures the handler receives the correct type
+        return handler(error)
 
     @staticmethod
     def match_partial[A](

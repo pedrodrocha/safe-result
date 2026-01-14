@@ -70,9 +70,9 @@ def match_app_error(error: AppError) -> str:
     return TaggedError.match(
         error,
         {
-            NotFoundError: handle_not_found,
-            ValidationError: handle_validation,
-            NetworkError: handle_network,
+            "NotFoundError": handle_not_found,
+            "ValidationError": handle_validation,
+            "NetworkError": handle_network,
         },
     )
 
