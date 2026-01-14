@@ -93,7 +93,7 @@ result_map(lambda x: x + 1)(result)  # Pipeable
 ## Handling Errors
 
 ```python
-from resultpy import Result, Err
+from resultpy import Result, Err, TaggedError
 
 err_result: Result[int, ValueError] = Err[int, ValueError](ValueError("invalid"))
 
@@ -195,6 +195,9 @@ result = await safe_async(
 ## Tagged Errors
 
 ```python
+from resultpy import Result, TaggedError
+from typing import Union, TypeAlias
+
 class NotFoundError(TaggedError):
     __slots__ = ("id",)
     @property
@@ -238,7 +241,7 @@ result_partial = TaggedError.match_partial(
         "ValidationError": handle_validation_error,
         "NotFoundError": handle_not_found_error,
     },
-    otherwise=lambda: Result.ok({"message": "Unknown error"})
+    otherwise=lambda e: Result.ok({"message": "Unknown error"})
 )
 
 ```
@@ -250,22 +253,46 @@ result_partial = TaggedError.match_partial(
 
 ## API Reference
 
-### Result
+### Types
+
+| Type | Description |
+|------|-------------|
+| `Result[A, E]` | Base type for results (Ok or Err) |
+| `Ok[A, E]` | Success variant |
+| `Err[A, E]` | Error variant |
+| `Matcher[A, B, E, F]` | TypedDict for pattern matching |
+| `TaggedError` | Base class for tagged errors |
+| `UnhandledException` | Error type for unhandled exceptions |
+
+### Result Creation
 
 | Function | Description |
 |----------|-------------|
-| `Result.ok(value)` | Create success |
-| `Result.err(error)` | Create error |
+| `Result.ok(value)` | Create success result |
+| `Result.err(error)` | Create error result |
+| `Ok(value)` | Create Ok instance |
+| `Err(error)` | Create Err instance |
 | `safe(fn, config?)` | Wrap throwing function with optional retry |
 | `safe_async(fn, config?)` | Wrap async function with optional retry |
+
+### Module-Level Functions (Data-First & Data-Last)
+
+| Function | Description |
+|----------|-------------|
+| `map(result, fn)` or `map(fn)(result)` | Transform success value |
+| `map_err(result, fn)` or `map_err(fn)(result)` | Transform error value |
+| `tap(result, fn)` or `tap(fn)(result)` | Side effect on success |
+| `tap_async(result, fn)` or `tap_async(fn)(result)` | Async side effect on success |
+| `and_then(result, fn)` or `and_then(fn)(result)` | Chain Result-returning function |
+| `and_then_async(result, fn)` or `and_then_async(fn)(result)` | Chain async Result-returning function |
+| `match(result, handlers)` or `match(handlers)(result)` | Pattern match on Result |
 | `unwrap(result, message?)` | Extract value or raise |
-| `map(result, fn)` | Transform success value (data-first) |
-| `map(fn)(result)` | Transform success value (data-last) |
 
 ### Instance Methods
 
 | Method | Description |
 |--------|-------------|
+| `.status` | Property: `"ok"` or `"err"` |
 | `.is_ok()` | Check if Ok |
 | `.is_err()` | Check if Err |
 | `.map(fn)` | Transform success value |
@@ -278,6 +305,27 @@ result_partial = TaggedError.match_partial(
 | `.unwrap_err(message?)` | Extract error or raise |
 | `.tap(fn)` | Side effect on success |
 | `.tap_async(fn)` | Async side effect on success |
+
+### TaggedError Methods
+
+| Method | Description |
+|--------|-------------|
+| `TaggedError.is_error(value)` | Type guard for Exception instances |
+| `TaggedError.is_tagged_error(value)` | Type guard for TaggedError instances |
+| `TaggedError.match(error, handlers)` | Exhaustive match by error class |
+| `TaggedError.match_partial(error, handlers, otherwise)` | Partial match by tag with fallback |
+| `.tag` | Property: error tag string |
+| `.message` | Property: error message |
+
+### Configuration Types
+
+| Type | Description |
+|------|-------------|
+| `SafeConfig` | Configuration for `safe()` |
+| `SafeConfigAsync` | Configuration for `safe_async()` |
+| `SafeOptions[A, E]` | Options with custom error mapping |
+| `RetryConfig` | Retry configuration for sync operations |
+| `RetryConfigAsync` | Retry configuration for async operations |
 
 ## License
 
