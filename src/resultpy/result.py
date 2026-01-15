@@ -485,6 +485,57 @@ class Result(Generic[A, E], ABC):
         """
         ...
 
+    @staticmethod
+    def hydrate(data: object) -> "Result[A, E] | None":
+        """
+        Deserializes a dictionary into a Result instance.
+
+        Takes a serialized Result dictionary (with 'status' and 'value' keys)
+        and reconstructs the appropriate Result instance (Ok or Err).
+
+        Parameters
+        ----------
+        data : object
+            The data to deserialize. Should be a dictionary with 'status' 
+            and 'value' keys, where 'status' is either 'ok' or 'err'.
+
+        Returns
+        -------
+        Result[A, E] | None
+            A Result instance if the data is valid, None otherwise.
+
+        Examples
+        --------
+        >>> Result.hydrate({'status': 'ok', 'value': 42})
+        Ok(42)
+        >>> Result.hydrate({'status': 'err', 'value': 'error'})
+        Err('error')
+        >>> Result.hydrate({'invalid': 'data'})
+        None
+        """
+        def is_result(d: object) -> bool:
+            if not isinstance(d, dict):
+                return False
+            if "status" not in d or "value" not in d:
+                return False
+            if d["status"] not in ("ok", "err"):
+                return False
+            return True
+        
+        if not is_result(data):
+            return None
+        
+        # At this point, we know data is a dict with the right structure
+        serialized = cast(SerializedResult[A, E], data)
+        
+        if serialized["status"] == "ok":
+            return Result.ok(serialized["value"])
+        
+        else:  # is_serialized_err
+            return Result.err(serialized["value"])
+        
+
+
 
 class Ok(Result[A, E]):
     """
