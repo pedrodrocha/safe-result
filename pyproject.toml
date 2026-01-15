@@ -18,9 +18,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/pedrodrocha/pyresult"
-Repository = "https://github.com/pedrodrocha/pyresult.git"
-Issues = "https://github.com/pedrodrocha/pyresult/issues"
+Homepage = "https://github.com/pedrodrocha/okresult"
+Repository = "https://github.com/pedrodrocha/okresult.git"
+Issues = "https://github.com/pedrodrocha/okresult/issues"
 
 [dependency-groups]
 dev = [
