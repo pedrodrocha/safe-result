@@ -505,6 +505,7 @@ class Result(Generic[A, E], ABC):
         Result[object, object] | None
             Ok(value) or Err(value) if the shape is valid, otherwise None.
         """
+
         def is_serialized_result(d: object) -> bool:
             if not isinstance(d, dict):
                 return False

@@ -664,8 +664,8 @@ class TestResult:
             assert Result.hydrate({"foo": "bar"}) is None
             assert Result.hydrate(None) is None
             assert Result.hydrate(42) is None
-            assert Result.hydrate({"status": "ok"}) is None  
-            assert Result.hydrate({"value": 42}) is None 
+            assert Result.hydrate({"status": "ok"}) is None
+            assert Result.hydrate({"value": 42}) is None
 
     class TestHydrateAs:
         def test_hydrates_as_ok_with_decoder(self) -> None:

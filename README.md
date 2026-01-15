@@ -43,6 +43,7 @@ message = parsed.match({
 - [Extracting Values](#extracting-values)
 - [Retry Support](#retry-support)
 - [Generator Composition](#generator-composition) *(TODO)*
+- [Panic](#panic) *(TODO)*
 - [Tagged Errors](#tagged-errors)
 - [Serialization](#serialization) 
 - [API Reference](#api-reference)
@@ -132,7 +133,6 @@ def fetch_user(id: str) -> Result[dict[str, str], NotFoundError]:
 def recover_from_not_found(e: NotFoundError) -> Result[dict[str, str], NotFoundError]:
     return Result.ok({"name": "Default User"})
 
-# Recover from specific errors
 result = fetch_user("123").match({
     "ok": lambda user: Result.ok(user),  # Pass through success
     "err": lambda e: recover_from_not_found(e) if e.tag == "NotFoundError" else Result.err(e)
@@ -163,6 +163,9 @@ value = result_err.match({
     "err": lambda e: 0,
 })
 ```
+## Generator Composition
+
+*TODO: Coming soon*
 
 ## Retry Support
 
@@ -191,9 +194,54 @@ result = await safe_async(
 )
 ```
 
-## Generator Composition
+## UnhandledException
 
-*TODO: Coming soon*
+When `safe()` or `safe_async()` catches an exception without a custom handler, the error type is `UnhandledException`:
+
+```python
+from resultpy import Result, UnhandledException, safe, safe_async, TaggedError
+import json
+
+# Automatic — error type is UnhandledException
+def parse_json(input: str) -> dict:
+    return json.loads(input)
+
+result = safe(parse_json)
+#    ^? Result[dict, UnhandledException]
+
+# Custom handler — you control the error type using TaggedError
+class ParseError(TaggedError):
+    __slots__ = ("cause",)
+    
+    @property
+    def tag(self) -> str:
+        return "ParseError"
+    
+    def __init__(self, cause: Exception) -> None:
+        super().__init__(f"Parse failed: {str(cause)}")
+        self.cause = cause
+
+result = safe({
+    "try_": lambda: parse_json('{"key": "value"}'),
+    "catch": lambda e: ParseError(e)
+})
+#    ^? Result[dict, ParseError]
+
+# Same for async
+async def fetch_and_parse(json_str: str) -> dict:
+    # Simulate async work
+    return parse_json(json_str)
+
+result = await safe_async(lambda: fetch_and_parse('{"async": true}'))
+#    ^? Result[dict, UnhandledException]
+
+# Async with custom error handler
+result = await safe_async({
+    "try_": lambda: fetch_and_parse('invalid'),
+    "catch": lambda e: ParseError(e)
+})
+#    ^? Result[dict, ParseError]
+```
 
 ## Tagged Errors
 
