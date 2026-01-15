@@ -486,33 +486,58 @@ class Result(Generic[A, E], ABC):
         ...
 
     @staticmethod
-    def hydrate(data: object) -> "Result[A, E] | None":
+    def hydrate_as[T, U](
+        data: object,
+        *,
+        ok: Callable[[object], T],
+        err: Callable[[object], U],
+    ) -> "Result[T, U] | None":
         """
-        Deserializes a dictionary into a Result instance.
+        Typed deserialization of a dictionary into a Result instance.
 
-        Takes a serialized Result dictionary (with 'status' and 'value' keys)
-        and reconstructs the appropriate Result instance (Ok or Err).
+        Takes a serialized Result dictionary and applies decoder functions
+        to the value, enabling strongly-typed deserialization. This follows
+        Rust's Serde pattern where decoders transform raw object data into
+        properly-typed values.
 
         Parameters
         ----------
         data : object
-            The data to deserialize. Should be a dictionary with 'status' 
+            The data to deserialize. Should be a dictionary with 'status'
             and 'value' keys, where 'status' is either 'ok' or 'err'.
+        ok : Callable[[object], T]
+            Decoder function that transforms the raw value into type T
+            when status is 'ok'. Should raise an exception if decoding fails.
+        err : Callable[[object], U]
+            Decoder function that transforms the raw value into type U
+            when status is 'err'. Should raise an exception if decoding fails.
 
         Returns
         -------
-        Result[A, E] | None
-            A Result instance if the data is valid, None otherwise.
+        Result[T, U] | None
+            A strongly-typed Result instance if the data is valid and decoders
+            succeed, None if validation fails or a decoder raises an exception.
 
         Examples
         --------
-        >>> Result.hydrate({'status': 'ok', 'value': 42})
+        >>> def decode_int(x: object) -> int:
+        ...     if isinstance(x, int):
+        ...         return x
+        ...     raise ValueError(f"Expected int, got {type(x)}")
+        >>> Result.hydrate_as(
+        ...     {'status': 'ok', 'value': 42},
+        ...     ok=decode_int,
+        ...     err=str,
+        ... )
         Ok(42)
-        >>> Result.hydrate({'status': 'err', 'value': 'error'})
+        >>> Result.hydrate_as(
+        ...     {'status': 'err', 'value': 'error'},
+        ...     ok=decode_int,
+        ...     err=str,
+        ... )
         Err('error')
-        >>> Result.hydrate({'invalid': 'data'})
-        None
         """
+
         def is_result(d: object) -> bool:
             if not isinstance(d, dict):
                 return False
@@ -521,20 +546,22 @@ class Result(Generic[A, E], ABC):
             if d["status"] not in ("ok", "err"):
                 return False
             return True
-        
+
         if not is_result(data):
             return None
-        
-        # At this point, we know data is a dict with the right structure
-        serialized = cast(SerializedResult[A, E], data)
-        
-        if serialized["status"] == "ok":
-            return Result.ok(serialized["value"])
-        
-        else:  # is_serialized_err
-            return Result.err(serialized["value"])
-        
 
+        serialized = cast(dict[str, object], data)
+
+        try:
+            if serialized["status"] == "ok":
+                decoded_value = ok(serialized["value"])
+                return Result.ok(decoded_value)
+            else:  # status == "err"
+                decoded_error = err(serialized["value"])
+                return Result.err(decoded_error)
+        except Exception as e:
+            # Panic - deserialization failed
+            return Result.err(cast(U, e))
 
 
 class Ok(Result[A, E]):

@@ -644,3 +644,75 @@ class TestResult:
             err = Result.err(error)
             serialized = err.serialize()
             assert serialized == {"status": "err", "value": str(error)}
+
+    class TestHydrateAs:
+        def test_hydrates_as_ok_with_decoder(self) -> None:
+            def decode_int(x: object) -> int:
+                if isinstance(x, int):
+                    return x
+                raise ValueError(f"Expected int, got {type(x)}")
+
+            serialized = {"status": "ok", "value": 42}
+            result: Result[int, str] | None = Result.hydrate_as(
+                serialized,
+                ok=decode_int,
+                err=str,
+            )
+            assert result is not None
+            assert isinstance(result, Ok)
+            assert result.unwrap() == 42
+
+        def test_hydrates_as_err_with_decoder(self) -> None:
+            def decode_error(x: object) -> str:
+                return f"Error: {x}"
+
+            def decode_int(x: object) -> int:
+                if isinstance(x, int):
+                    return x
+                raise ValueError(f"Expected int, got {type(x)}")
+
+            serialized = {"status": "err", "value": "something failed"}
+            result: Result[int, str] | None = Result.hydrate_as(
+                serialized,
+                ok=decode_int,
+                err=decode_error,
+            )
+            assert result is not None
+            assert isinstance(result, Err)
+            assert result.unwrap_err() == "Error: something failed"
+
+        def test_returns_none_for_invalid_data(self) -> None:
+            def decode_int(x: object) -> int:
+                if isinstance(x, int):
+                    return x
+                raise ValueError(f"Expected int, got {type(x)}")
+
+            assert (
+                Result.hydrate_as(
+                    {"foo": "bar"},
+                    ok=decode_int,
+                    err=str,
+                )
+                is None
+            )
+            assert Result.hydrate_as(None, ok=decode_int, err=str) is None
+
+            assert Result.hydrate_as(42, ok=decode_int, err=str) is None
+
+        def test_returns_err_when_decoder_fails(self) -> None:
+            def strict_int(x: object) -> int:
+                if isinstance(x, int):
+                    return x
+                raise ValueError("Not an int")
+
+            serialized = {"status": "ok", "value": "not_an_int"}
+            result = Result.hydrate_as(
+                serialized,
+                ok=strict_int,
+                err=str,
+            )
+            assert result is not None
+            assert result.is_err()
+            error = result.unwrap_err()
+            assert isinstance(error, ValueError)
+            assert str(error) == "Not an int"
