@@ -54,6 +54,8 @@ poetry.lock
 # Ruff 
 .ruff_cache/
 
+# uv
+uv.lock
 # Extras
 .markdownlint-cli2.yaml
 .notes/
