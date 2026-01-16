@@ -4,6 +4,7 @@
   
 ### Added
 
+- `fn` helper for typed lambda expressions: `fn[int, int](lambda x: x * 2)`
 - `Panic` exception class for signaling defects in user-provided callbacks
 - Docstrings for all public APIs in `result.py`, `error.py`, and `safe.py`
  
