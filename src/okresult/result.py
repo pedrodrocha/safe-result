@@ -1,4 +1,5 @@
 from typing import (
+    Awaitable,
     TypeVar,
     Generic,
     Literal,
@@ -14,6 +15,7 @@ from typing import (
 )
 from abc import ABC, abstractmethod
 
+from .error import panic
 
 T = TypeVar("T")
 A = TypeVar("A", covariant=True)
@@ -458,3 +460,17 @@ def match(
         _handlers = cast(Matcher[A, B, E, B], result)
         return lambda r: r.match(_handlers)
     return cast(Result[A, E], result).match(handlers)
+
+
+def try_or_panic(fn: Callable[[], A], message: str) -> A:
+    try:
+        return fn()
+    except Exception as e:
+        panic(message, e)
+
+
+async def try_or_panic_async(fn: Callable[[], Awaitable[A]], message: str) -> A:
+    try:
+        return await fn()
+    except Exception as e:
+        panic(message, e)

@@ -3,7 +3,7 @@ from typing_extensions import TypedDict
 import asyncio
 
 from .result import Result, Ok, Err
-from .error import UnhandledException, panic
+from .error import UnhandledException
 
 A = TypeVar("A")
 E = TypeVar("E")
@@ -134,10 +134,3 @@ async def safe_async(
         result = await execute()
 
     return result
-
-
-def try_or_panic(fn: Callable[[], A], message: str) -> A:
-    try:
-        return fn()
-    except Exception as e:
-        panic(message, e)
