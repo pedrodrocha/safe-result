@@ -17,26 +17,63 @@ from abc import ABC, abstractmethod
 
 from .error import panic
 
+"""
+Type variable for method parameters
+"""
 T = TypeVar("T")
+
+"""
+Type variable for a generic type A
+"""
 A = TypeVar("A", covariant=True)
+
+"""
+Type variable for a transformed generic type B
+"""
 B = TypeVar("B")
+
+"""
+Type variable for a generic error type E
+"""
 E = TypeVar("E", covariant=True)
+
+"""
+Type variable for a method error parameter U
+"""
 U = TypeVar("U")
+
+"""
+Type variable for a generic type G, contravariant
+"""
 G = TypeVar("G", contravariant=True)
+
+
+"""
+Type variable for a transformed generic error type F
+"""
 F = TypeVar("F")
 
 
 class Matcher(TypedDict, Generic[A, B, E, F]):
+    """"
+    TypedDict for pattern matching on Result variants
+    """
     ok: Callable[[A], B]
     err: Callable[[E], F]
 
 
 class SerializedOk(TypedDict, Generic[A]):
+    """
+    A serialized representation of an Ok result
+    """
     status: Literal["ok"]
     value: A
 
 
 class SerializedErr(TypedDict, Generic[E]):
+    """
+    A serialized representation of an Err result
+    """
     status: Literal["err"]
     value: E
 
