@@ -18,7 +18,7 @@ pip install okresult
 ## Quick Start
 
 ```python
-from okresult import Result, safe
+from okresult import Result, safe, fn
 import json
 
 # Wrap throwing functions
@@ -34,8 +34,8 @@ else:
 
 # Or use pattern matching
 message = parsed.match({
-    "ok": lambda data: f"Got: {data['name']}",
-    "err": lambda e: f"Failed: {e.cause}",
+    "ok": fn[dict[str, str], str](lambda data: f"Got: {data['name']}"),
+    "err": fn[object, str](lambda e: f"Failed: {e.cause}"),
 })
 ```
 
@@ -47,7 +47,6 @@ message = parsed.match({
 - [Extracting Values](#extracting-values)
 - [Panic](#panic)
 - [Retry Support](#retry-support)
-- [Generator Composition](#generator-composition) *(TODO)*
 - [Tagged Errors](#tagged-errors)
 - [Serialization](#serialization) 
 - [API Reference](#api-reference)
@@ -55,7 +54,7 @@ message = parsed.match({
 ## Creating Results
 
 ```python
-from okresult import Result, Ok, Err, safe, safe_async
+from okresult import Result, Ok, Err, safe, safe_async, fn
 
 # Success
 ok = Result.ok(42)
@@ -76,37 +75,37 @@ async def risky_async() -> float:
 result = await safe_async(risky_async)
 
 # With custom error handling
-result = safe({"try_": risky, "catch": lambda e: "Error: " + str(e)})
+result = safe({"try_": risky, "catch": fn[Exception, str](lambda e: "Error: " + str(e))})
 ```
 
 ## Transforming Results
 
 ```python
-from okresult import Ok, Err, map as result_map
+from okresult import Ok, Err, map as result_map, fn
 
 result = (
     Ok[int, ValueError](2)
-    .map(lambda x: x * 2)  # Ok(4)
+    .map(fn[int, int](lambda x: x * 2))  # Ok(4)
     .and_then(
         # Chain Result-returning functions
-        lambda x: Ok[int, ValueError](x) if x > 0 else Err[int, ValueError](ValueError("negative"))
+        fn[int, Result[int, ValueError]](lambda x: Ok[int, ValueError](x) if x > 0 else Err[int, ValueError](ValueError("negative")))
     )
 )
 
 # Standalone functions (data-first or data-last)
-result_map(result, lambda x: x + 1)
-result_map(lambda x: x + 1)(result)  # Pipeable
+result_map(result, fn[int, int](lambda x: x + 1))
+result_map(fn[int, int](lambda x: x + 1))(result)  # Pipeable
 ```
 
 ## Handling Errors
 
 ```python
-from okresult import Result, TaggedError
+from okresult import Result, TaggedError, fn
 
 err_result: Result[int, ValueError] = Result.err(ValueError("invalid"))
 
 # Transform errors
-err_result.map_err(lambda e: RuntimeError(str(e)))  # Err(RuntimeError(...))
+err_result.map_err(fn[ValueError, RuntimeError](lambda e: RuntimeError(str(e))))  # Err(RuntimeError(...))
 
 
 # Recover from specific errors
@@ -128,8 +127,8 @@ def recover_from_not_found(e: NotFoundError) -> Result[dict[str, str], NotFoundE
     return Result.ok({"name": "Default User"})
 
 result = fetch_user("123").match({
-    "ok": lambda user: Result.ok(user),  # Pass through success
-    "err": lambda e: recover_from_not_found(e) if e.tag == "NotFoundError" else Result.err(e)
+    "ok": fn[dict[str, str], Result[dict[str, str], NotFoundError]](lambda user: Result.ok(user)),  # Pass through success
+    "err": fn[NotFoundError, Result[dict[str, str], NotFoundError]](lambda e: recover_from_not_found(e) if e.tag == "NotFoundError" else Result.err(e))
 })
 
 
@@ -138,7 +137,7 @@ result = fetch_user("123").match({
 ## Extracting Values
 
 ```python
-from okresult import Result, unwrap
+from okresult import Result, unwrap, fn
 
 result_ok = Result.ok(42)
 result_err = Result.err(ValueError("invalid"))
@@ -146,15 +145,14 @@ result_err = Result.err(ValueError("invalid"))
 # Unwrap (throws on Err)
 value = unwrap(result_ok)
 value = result_ok.unwrap()
-value = result_ok.unwrap("custom error message")
 
 # With fallback
 value = result_err.unwrap_or(0)
 
 # Pattern match
 value = result_err.match({
-    "ok": lambda v: v,
-    "err": lambda e: 0,
+    "ok": fn[int, int](lambda v: v),
+    "err": fn[ValueError, int](lambda e: 0),
 })
 ```
 ## Generator Composition
@@ -166,34 +164,34 @@ value = result_err.match({
 Thrown (not returned) when user callbacks throw inside Result operations. Represents a defect in your code, not a domain error.
 
 ```python
-from okresult import Result, Panic
+from okresult import Result, Panic, fn
 
 # Callback throws → Panic
 try:
-    Result.ok(1).map(lambda x: 1 // 0)
+    Result.ok(1).map(fn[int, int](lambda x: 1 // 0))
 except Panic as p:
     print(f"Panic: {p.message}, caused by: {p.cause}")
 
 # Catch handler throws → Panic  
 try:
-    Result.try_({
+    safe({
         "try_": lambda: 1 / 1,
-        "catch": lambda e: 1 // 0  # Bug in handler
+        "catch": fn[Exception, int](lambda e: 1 // 0)  # Bug in handler
     })
 except Panic as p:
     print(f"Panic: {p.message}, caused by: {p.cause}")
 
 # and_then callback throws → Panic
 try:
-    Result.ok(1).and_then(lambda x: 1 // 0)
+    Result.ok(1).and_then(fn[int, Result[int, str]](lambda x: 1 // 0))
 except Panic as p:
     print(f"Panic: {p.message}, caused by: {p.cause}")
 
 # match handler throws → Panic
 try:
     Result.ok(1).match({
-        "ok": lambda x: 1 // 0,  # Bug in handler
-        "err": lambda e: 0
+        "ok": fn[int, int](lambda x: 1 // 0),  # Bug in handler
+        "err": fn[str, int](lambda e: 0)
     })
 except Panic as p:
     print(f"Panic: {p.message}, caused by: {p.cause}")
@@ -214,7 +212,7 @@ except Panic as p:
 ## Retry Support
 
 ```python
-from okresult import safe, safe_async
+from okresult import safe, safe_async, fn
 
 def risky() -> float:
     raise ValueError("Invalid input")
@@ -227,7 +225,7 @@ async def fetch(url: str) -> str:
     raise ConnectionError("Network error")
 
 result = await safe_async(
-    lambda: fetch("https://api.example.com"),
+    lambda: fetch("https://api.example.com"),  
     {
         "retry": {
             "times": 3,
@@ -243,14 +241,14 @@ result = await safe_async(
 When `safe()` or `safe_async()` catches an exception without a custom handler, the error type is `UnhandledException`:
 
 ```python
-from okresult import Result, UnhandledException, safe, safe_async, TaggedError
+from okresult import Result, UnhandledException, safe, safe_async, TaggedError, fn
 import json
 
 # Automatic — error type is UnhandledException
-def parse_json(input: str) -> dict:
+def parse_json(input: str) -> dict[str, str]:
     return json.loads(input)
 
-result = safe(parse_json)
+result = safe(lambda: parse_json('{"key": "value"}'))  
 
 # Custom handler — you control the error type using TaggedError
 class ParseError(TaggedError):
@@ -265,26 +263,26 @@ class ParseError(TaggedError):
         self.cause = cause
 
 result = safe({
-    "try_": lambda: parse_json('{"key": "value"}'),
-    "catch": lambda e: ParseError(e)
+    "try_": lambda: parse_json('{"key": "value"}'),  
+    "catch": fn[Exception, ParseError](lambda e: ParseError(e))
 })
 
 # Same for async
-async def fetch_and_parse(json_str: str) -> dict:
+async def fetch_and_parse(json_str: str) -> dict[str, str]:
     # Simulate async work
     return parse_json(json_str)
 
 # Async with custom error handler
 result = await safe_async({
-    "try_": lambda: fetch_and_parse('invalid'),
-    "catch": lambda e: ParseError(e)
+    "try_": lambda: fetch_and_parse('invalid'),  
+    "catch": fn[Exception, ParseError](lambda e: ParseError(e))
 })
 ```
 
 ## Tagged Errors
 
 ```python
-from okresult import Result, TaggedError
+from okresult import Result, TaggedError, fn
 from typing import Union, TypeAlias
 
 class NotFoundError(TaggedError):
@@ -330,7 +328,7 @@ result_partial = TaggedError.match_partial(
         "ValidationError": handle_validation_error,
         "NotFoundError": handle_not_found_error,
     },
-    otherwise=lambda e: Result.ok({"message": "Unknown error"})
+    otherwise=fn[TaggedError, Result[dict[str, str], ValidationError]](lambda e: Result.ok({"message": "Unknown error"}))
 )
 
 ```
@@ -341,7 +339,7 @@ result_partial = TaggedError.match_partial(
 Rehydrate Results from JSON for storage or network transfer.
 
 ```python
-from okresult import Result
+from okresult import Result, fn
 import json
 
 # Serialize a Result to JSON (e.g., storage or network transfer)
@@ -354,7 +352,7 @@ hydrated = Result.hydrate(json.loads(serialized_json))
 
 
 # Now you can use Result methods again
-doubled = hydrated.map(lambda x: x * 2)  # Ok(84)
+doubled = hydrated.map(fn[int, int](lambda x: x * 2))  # Ok(84)
 
 # Works with Err too
 err_result = Result.err(ValueError("failed"))
