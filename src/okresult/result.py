@@ -95,6 +95,7 @@ class Result(Generic[A, E], ABC):
         >>> result.map(lambda x: x * 2)
         Ok(84)
     """
+
     __slots__ = ()
 
     @property
@@ -216,6 +217,7 @@ class Result(Generic[A, E], ABC):
             >>> Result.hydrate({"invalid": "data"})
             None
         """
+
         def is_serialized_result(d: object) -> bool:
             if not isinstance(d, dict):
                 return False
@@ -258,6 +260,7 @@ class Result(Generic[A, E], ABC):
             >>> Result.hydrate_as({"status": "ok", "value": "42"}, ok=decode_int, err=str)
             Ok(42)
         """
+
         def is_result(d: object) -> bool:
             if not isinstance(d, dict):
                 return False
@@ -296,6 +299,7 @@ class Ok(Result[A, E]):
         >>> result.status
         'ok'
     """
+
     __slots__ = ("value",)
     __match_args__ = ("value",)
 
@@ -475,6 +479,7 @@ class Ok(Result[A, E]):
             >>> Ok(2).match({"ok": lambda x: x * 2, "err": lambda e: 0})
             4
         """
+
         def call_handler() -> B | F:
             return cases["ok"](self.value)
 
@@ -521,6 +526,7 @@ class Err(Result[A, E]):
         >>> result.status
         'err'
     """
+
     __slots__ = ("value",)
     __match_args__ = ("value",)
 
@@ -669,6 +675,7 @@ class Err(Result[A, E]):
             >>> Err("fail").match({"ok": lambda x: x, "err": lambda e: len(e)})
             4
         """
+
         def call_handler() -> B | F:
             return cases["err"](self.value)
 

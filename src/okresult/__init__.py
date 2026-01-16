@@ -29,6 +29,8 @@ from .safe import (
 
 from .error import TaggedError, UnhandledException, is_panic, panic, Panic
 
+from .fn import fn
+
 __all__ = [
     # Result types
     "Err",
@@ -59,4 +61,6 @@ __all__ = [
     "is_panic",
     "panic",
     "Panic",
+    # Function types
+    "fn",
 ]

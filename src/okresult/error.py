@@ -20,6 +20,7 @@ class TaggedError(ABC, Exception):
         ...         return "MyError"
         >>> raise MyError("something failed", cause="invalid input")
     """
+
     __slots__ = ("_message", "_non_exception_cause")
 
     _message: str
@@ -155,6 +156,7 @@ class UnhandledException(TaggedError):
         ... except Exception as e:
         ...     err = UnhandledException(e)
     """
+
     @property
     def tag(self) -> str:
         return "UnhandledException"
@@ -177,6 +179,7 @@ class Panic(TaggedError):
     Example:
         >>> raise Panic("invariant violated", cause=data)
     """
+
     @property
     def tag(self) -> str:
         return "Panic"

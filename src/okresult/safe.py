@@ -15,6 +15,7 @@ class RetryConfig(TypedDict, total=False):
     Attributes:
         times: Number of retry attempts.
     """
+
     times: int
 
 
@@ -26,6 +27,7 @@ class RetryConfigAsync(TypedDict, total=False):
         delay_ms: Delay in milliseconds between retries.
         backoff: Backoff strategy (constant, linear, or exponential).
     """
+
     times: int
     delay_ms: int
     backoff: Literal["constant", "linear", "exponential"]
@@ -37,6 +39,7 @@ class SafeConfig(TypedDict, total=False):
     Attributes:
         retry: Retry configuration.
     """
+
     retry: RetryConfig
 
 
@@ -46,6 +49,7 @@ class SafeConfigAsync(TypedDict, total=False):
     Attributes:
         retry: Retry configuration.
     """
+
     retry: RetryConfigAsync
 
 
@@ -56,6 +60,7 @@ class SafeOptions(TypedDict, Generic[A, E]):
         try_: Function to execute.
         catch: Function to transform caught exceptions.
     """
+
     try_: Callable[[], A]
     catch: Callable[[Exception], E]
 
@@ -96,6 +101,7 @@ def safe(
         >>> safe({"try_": lambda: parse(x), "catch": lambda e: "error"})
         Err("error")
     """
+
     def execute() -> Result[A, E] | Result[A, UnhandledException]:
         if callable(thunk):
             try:
@@ -165,6 +171,7 @@ async def safe_async(
         ...     {"retry": {"times": 3, "delay_ms": 100, "backoff": "exponential"}}
         ... )
     """
+
     async def execute() -> Result[A, E] | Result[A, UnhandledException]:
         if callable(thunk):
             try:
