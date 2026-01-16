@@ -1,8 +1,5 @@
 # okresult
 
-> [!WARNING]
-> ...Still cooking... :man_cook:
-
 Lightweight Result type for Python, inspired by [better-result](https://github.com/dmmulroy/better-result).
 
 ## Install
