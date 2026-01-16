@@ -103,17 +103,63 @@ class Result(Generic[A, E], ABC):
 
     @staticmethod
     def ok(value: T) -> "Ok[T, Never]":
+        """Creates successful result.
+
+        Args:
+            value: Success value.
+
+        Returns:
+            Ok instance.
+
+        Example:
+            >>> Result.ok(42)
+            Ok(42)
+        """
         return Ok(value)
 
     @staticmethod
     def err(value: U) -> "Err[Never, U]":
+        """Creates error result.
+
+        Args:
+            value: Error value.
+
+        Returns:
+            Err instance.
+
+        Example:
+            >>> Result.err("failed")
+            Err('failed')
+        """
         return Err(value)
 
-    @abstractmethod
-    def is_ok(self) -> bool: ...
+    def is_ok(self) -> bool:
+        """Returns True if result is Ok.
 
-    @abstractmethod
-    def is_err(self) -> bool: ...
+        Returns:
+            True if Ok, False otherwise.
+
+        Example:
+            >>> Ok(42).is_ok()
+            True
+            >>> Err("fail").is_ok()
+            False
+        """
+        return self.status == "ok"
+
+    def is_err(self) -> bool:
+        """Returns True if result is Err.
+
+        Returns:
+            True if Err, False otherwise.
+
+        Example:
+            >>> Ok(42).is_err()
+            False
+            >>> Err("fail").is_err()
+            True
+        """
+        return self.status == "err"
 
     @abstractmethod
     def map(self, fn: Callable[[A], B]) -> "Result[B, E]": ...
@@ -152,6 +198,24 @@ class Result(Generic[A, E], ABC):
 
     @staticmethod
     def hydrate(data: object) -> "Result[object, object] | None":
+        """Rehydrates serialized Result from plain dict back into Ok/Err instances.
+
+        Returns None if not a serialized Result.
+
+        Args:
+            data: Serialized result dict.
+
+        Returns:
+            Result instance or None.
+
+        Example:
+            >>> Result.hydrate({"status": "ok", "value": 42})
+            Ok(42)
+            >>> Result.hydrate({"status": "err", "value": "fail"})
+            Err('fail')
+            >>> Result.hydrate({"invalid": "data"})
+            None
+        """
         def is_serialized_result(d: object) -> bool:
             if not isinstance(d, dict):
                 return False
@@ -177,6 +241,23 @@ class Result(Generic[A, E], ABC):
         ok: Callable[[object], T],
         err: Callable[[object], U],
     ) -> "Result[T, U] | None":
+        """Rehydrates serialized Result with custom decoders for values.
+
+        Returns None if not a serialized Result. If decoders throw, returns Err with the exception.
+
+        Args:
+            data: Serialized result dict.
+            ok: Decoder for success values.
+            err: Decoder for error values.
+
+        Returns:
+            Result instance or None.
+
+        Example:
+            >>> def decode_int(x): return int(x)
+            >>> Result.hydrate_as({"status": "ok", "value": "42"}, ok=decode_int, err=str)
+            Ok(42)
+        """
         def is_result(d: object) -> bool:
             if not isinstance(d, dict):
                 return False
@@ -411,12 +492,6 @@ class Ok(Result[A, E]):
         """
         return SerializedOk(status="ok", value=self.value)
 
-    def is_ok(self) -> bool:
-        return True
-
-    def is_err(self) -> bool:
-        return False
-
     def __repr__(self) -> str:
         return f"Ok({self.value!r})"
 
@@ -611,12 +686,6 @@ class Err(Result[A, E]):
         """
         value = str(self.value) if isinstance(self.value, Exception) else self.value
         return SerializedErr(status="err", value=value)
-
-    def is_ok(self) -> bool:
-        return False
-
-    def is_err(self) -> bool:
-        return True
 
     def __repr__(self) -> str:
         return f"Err({self.value!r})"
