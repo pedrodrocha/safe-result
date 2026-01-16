@@ -20,8 +20,7 @@ class TaggedError(ABC, Exception):
 
     @property
     @abstractmethod
-    def tag(self) -> str:
-        ...
+    def tag(self) -> str: ...
 
     @property
     def message(self) -> str:
@@ -30,6 +29,7 @@ class TaggedError(ABC, Exception):
     def __init__(self, message: str, cause: Optional[object] = None) -> None:
         super().__init__(message)
         self._message = message
+
         if isinstance(cause, BaseException):
             self._non_exception_cause = _NOT_SET
             self.__cause__ = cause  # Python's built-in cause chaining
@@ -40,7 +40,9 @@ class TaggedError(ABC, Exception):
     def __getattribute__(self, name: str) -> Union[BaseException, None, object]:
         if name == "__cause__":
             try:
-                non_exception_cause = object.__getattribute__(self, "_non_exception_cause")
+                non_exception_cause = object.__getattribute__(
+                    self, "_non_exception_cause"
+                )
                 if non_exception_cause is not _NOT_SET:
                     return non_exception_cause
             except AttributeError:
@@ -90,3 +92,26 @@ class UnhandledException(TaggedError):
     def __init__(self, cause: object) -> None:
         message = f"Unhandled exception: {cause}"
         super().__init__(message, cause)
+
+
+class Panic(TaggedError):
+    @property
+    def tag(self) -> str:
+        return "Panic"
+
+    def __init__(self, message: str, cause: Optional[object] = None) -> None:
+        super().__init__(message, cause)
+
+
+def is_panic(value: object) -> bool:
+    return isinstance(value, Panic)
+
+
+def panic(message: str, cause: Optional[object] = None) -> None:
+    """
+    Raise a Panic error with the given message and optional cause.
+    :param message: The panic message.
+    :param cause: The optional cause of the panic.
+    :raises Panic: Always raises a Panic error.
+    """
+    raise Panic(message, cause)
