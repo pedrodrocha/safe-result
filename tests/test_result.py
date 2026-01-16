@@ -120,15 +120,17 @@ class TestResult:
             ok = Result.ok(100)
             assert ok.unwrap() == 100
 
-        def test_raises_exception_for_err(self) -> None:
+        def test_panics_for_err(self) -> None:
             err = Result.err("Error")
-            with pytest.raises(Exception):
+            with pytest.raises(Panic) as exc_info:
                 err.unwrap()
+            assert "unwrap called on Err" in str(exc_info.value)
 
-        def test_raises_exception_for_err_with_message(self) -> None:
+        def test_panics_for_err_with_custom_message(self) -> None:
             err = Result.err("Error")
-            with pytest.raises(Exception, match="Custom message"):
+            with pytest.raises(Panic) as exc_info:
                 err.unwrap("Custom message")
+            assert "Custom message" in str(exc_info.value)
 
     class TestUnwrapOr:
 
@@ -388,15 +390,17 @@ class TestResult:
             result = Result.ok(42)
             assert unwrap(result) == 42
 
-        def test_raises_exception_for_err(self) -> None:
+        def test_panics_for_err(self) -> None:
             result = Result.err("Error")
-            with pytest.raises(Exception):
+            with pytest.raises(Panic) as exc_info:
                 unwrap(result)
+            assert "unwrap called on Err" in str(exc_info.value)
 
-        def test_raises_exception_with_custom_message(self) -> None:
+        def test_panics_for_err_with_custom_message(self) -> None:
             result = Result.err("Error")
-            with pytest.raises(Exception, match="Custom message"):
+            with pytest.raises(Panic) as exc_info:
                 unwrap(result, "Custom message")
+            assert "Custom message" in str(exc_info.value)
 
     class TestAndThen:
         def test_chains_ok_to_ok(self) -> None:
@@ -480,15 +484,17 @@ class TestResult:
             err: Err[int, str] = Err("Error message")
             assert err.unwrap_err() == "Error message"
 
-        def test_raises_exception_for_ok(self) -> None:
+        def test_panics_for_ok(self) -> None:
             ok: Ok[int, str] = Ok(42)
-            with pytest.raises(Exception):
+            with pytest.raises(Panic) as exc_info:
                 ok.unwrap_err()
+            assert "unwrap_err called on Ok" in str(exc_info.value)
 
-        def test_raises_exception_for_ok_with_message(self) -> None:
+        def test_panics_for_ok_with_custom_message(self) -> None:
             ok: Ok[int, str] = Ok(42)
-            with pytest.raises(Exception, match="Expected an error"):
+            with pytest.raises(Panic) as exc_info:
                 ok.unwrap_err("Expected an error")
+            assert "Expected an error" in str(exc_info.value)
 
     class TestAndThenTopLevel:
         def test_data_first_chains_ok_to_ok(self) -> None:

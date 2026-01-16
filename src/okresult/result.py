@@ -12,6 +12,7 @@ from typing import (
     Coroutine,
     TypedDict,
     TypeAlias,
+    NoReturn,
 )
 from abc import ABC, abstractmethod
 
@@ -215,8 +216,8 @@ class Ok(Result[A, E]):
     def unwrap_or(self, fallback: object) -> A:
         return self.value
 
-    def unwrap_err(self, message: Optional[str] = None) -> Never:
-        raise Exception(message or f"unwrap_err called on Ok: {self.value!r}")
+    def unwrap_err(self, message: Optional[str] = None) -> NoReturn:
+        panic(message or f"unwrap_err called on Ok: {self.value!r}")
 
     def tap(self, fn: Callable[[A], None]) -> "Ok[A, E]":
         fn(self.value)
@@ -284,8 +285,8 @@ class Err(Result[A, E]):
     def map_err(self, fn: Callable[[E], F]) -> "Err[A, F]":
         return try_or_panic(lambda: Err(fn(self.value)), "Err.map_err failed")
 
-    def unwrap(self, message: Optional[str] = None) -> Never:
-        raise Exception(message or f"Unwrap called on Err: {self.value!r}")
+    def unwrap(self, message: Optional[str] = None) -> NoReturn:
+        panic(message or f"unwrap called on Err: {self.value!r}")
 
     def unwrap_or(self, fallback: B) -> B:
         return fallback
