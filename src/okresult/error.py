@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, TypeVar, Dict, Callable, Union
+from typing import Optional, TypeVar, Dict, Callable, Union, NoReturn
 
 A = TypeVar("A")
 E = TypeVar("E", bound="TaggedError")
@@ -103,5 +103,5 @@ def is_panic(value: object) -> bool:
     return isinstance(value, Panic)
 
 
-def panic(message: str, cause: Optional[object] = None) -> None:
+def panic(message: str, cause: Optional[object] = None) -> NoReturn:
     raise Panic(message, cause)

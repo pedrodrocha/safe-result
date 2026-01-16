@@ -3,7 +3,7 @@ from typing_extensions import TypedDict
 import asyncio
 
 from .result import Result, Ok, Err
-from .error import UnhandledException
+from .error import UnhandledException, panic
 
 A = TypeVar("A")
 E = TypeVar("E")
@@ -50,43 +50,6 @@ def safe(
     thunk: Callable[[], A] | SafeOptions[A, E],
     config: SafeConfig | None = None,
 ) -> Result[A, E] | Result[A, UnhandledException]:
-    """
-    Wraps a potentially throwing function into a Result.
-
-    Supports two calling patterns:
-    1. Simple thunk: `safe(lambda: risky_operation())`
-    2. With custom error mapping: `safe({"try_": fn, "catch": mapper})`
-
-    Parameters
-    ----------
-    thunk : Callable[[], A] | SafeOptions[A, E]
-        Either a callable that may throw, or options with try_/catch.
-    config : SafeConfig | None, default None
-        Optional configuration with retry settings.
-
-    Returns
-    -------
-    Result[A, UnhandledException] | Result[A, E]
-        Ok with the value, or Err with UnhandledException or custom error.
-
-    Examples
-    --------
-    >>> safe(lambda: int("42"))
-    Ok(42)
-    >>> safe(lambda: int("bad"))
-    Err(UnhandledException(ValueError(...)))
-    >>> safe(lambda: int("bad"), {"retry": {"times": 3}})
-    Err(UnhandledException(ValueError(...)))  # After 3 retries
-    >>> safe({"try_": lambda: int("bad"), "catch": lambda e: str(e)})
-    Err("invalid literal for int()...")
-    >>> def risky() -> float:
-    ...     raise ValueError("Invalid input")
-    >>> safe(risky)
-    Err(UnhandledException(ValueError('Invalid input')))
-    >>> safe({"try_": risky, "catch": lambda e: "Error: " + str(e)})
-    Err('Error: Invalid input')
-    """
-
     def execute() -> Result[A, E] | Result[A, UnhandledException]:
         if callable(thunk):
             try:
@@ -130,46 +93,6 @@ async def safe_async(
     thunk: Callable[[], Awaitable[A]] | SafeOptions[Awaitable[A], E],
     config: SafeConfigAsync | None = None,
 ) -> Result[A, E] | Result[A, UnhandledException]:
-    """
-    Wraps a potentially throwing async function into a Result.
-
-    Supports two calling patterns:
-    1. Simple thunk: `safe_async(lambda: fetch_data())`
-    2. With custom error mapping: `safe_async({"try_": fn, "catch": mapper})`
-
-    Parameters
-    ----------
-    thunk : Callable[[], Awaitable[A]] | SafeOptions[Awaitable[A], E]
-        Either an async callable that may throw, or options with try_/catch.
-    config : SafeConfigAsync | None, default None
-        Optional configuration with retry settings (times, delay_ms, backoff).
-
-    Returns
-    -------
-    Result[A, UnhandledException] | Result[A, E]
-        Ok with the value, or Err with UnhandledException or custom error.
-
-    Examples
-    --------
-    >>> async def risky_async() -> float:
-    ...     raise ValueError("Invalid input")
-    >>> await safe_async(risky_async)
-    Err(UnhandledException(ValueError('Invalid input')))
-    >>> async def fetch(url: str) -> str:
-    ...     raise ConnectionError("Network error")
-    >>> await safe_async(
-    ...     lambda: fetch("https://api.example.com"),
-    ...     {
-    ...         "retry": {
-    ...             "times": 3,
-    ...             "delay_ms": 100,
-    ...             "backoff": "exponential",  # or "linear" | "constant"
-    ...         }
-    ...     }
-    ... )
-    Err(UnhandledException(ConnectionError('Network error')))  # After retries
-    """
-
     async def execute() -> Result[A, E] | Result[A, UnhandledException]:
         if callable(thunk):
             try:
@@ -211,3 +134,10 @@ async def safe_async(
         result = await execute()
 
     return result
+
+
+def try_or_panic(fn: Callable[[], A], message: str) -> A:
+    try:
+        return fn()
+    except Exception as e:
+        panic(message, e)
