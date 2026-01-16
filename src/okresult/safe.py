@@ -10,24 +10,52 @@ E = TypeVar("E")
 
 
 class RetryConfig(TypedDict, total=False):
+    """Configuration for retry behavior in safe.
+
+    Attributes:
+        times: Number of retry attempts.
+    """
     times: int
 
 
 class RetryConfigAsync(TypedDict, total=False):
+    """Configuration for retry behavior in safe_async.
+
+    Attributes:
+        times: Number of retry attempts.
+        delay_ms: Delay in milliseconds between retries.
+        backoff: Backoff strategy (constant, linear, or exponential).
+    """
     times: int
     delay_ms: int
     backoff: Literal["constant", "linear", "exponential"]
 
 
 class SafeConfig(TypedDict, total=False):
+    """Configuration for safe execution.
+
+    Attributes:
+        retry: Retry configuration.
+    """
     retry: RetryConfig
 
 
 class SafeConfigAsync(TypedDict, total=False):
+    """Configuration for safe async execution.
+
+    Attributes:
+        retry: Retry configuration.
+    """
     retry: RetryConfigAsync
 
 
 class SafeOptions(TypedDict, Generic[A, E]):
+    """Options for safe execution with custom error handling.
+
+    Attributes:
+        try_: Function to execute.
+        catch: Function to transform caught exceptions.
+    """
     try_: Callable[[], A]
     catch: Callable[[Exception], E]
 
@@ -50,6 +78,24 @@ def safe(
     thunk: Callable[[], A] | SafeOptions[A, E],
     config: SafeConfig | None = None,
 ) -> Result[A, E] | Result[A, UnhandledException]:
+    """Executes function safely, wrapping result/error in Result.
+
+    Args:
+        thunk: Function to execute or options dict with try_ and catch.
+        config: Optional retry configuration.
+
+    Returns:
+        Result containing value or error.
+
+    Raises:
+        Panic: If catch handler throws.
+
+    Example:
+        >>> safe(lambda: 1 / 0)
+        Err(UnhandledException(...))
+        >>> safe({"try_": lambda: parse(x), "catch": lambda e: "error"})
+        Err("error")
+    """
     def execute() -> Result[A, E] | Result[A, UnhandledException]:
         if callable(thunk):
             try:
@@ -97,6 +143,28 @@ async def safe_async(
     thunk: Callable[[], Awaitable[A]] | SafeOptions[Awaitable[A], E],
     config: SafeConfigAsync | None = None,
 ) -> Result[A, E] | Result[A, UnhandledException]:
+    """Executes async function safely, wrapping result/error in Result.
+
+    Supports retry with configurable delay and backoff.
+
+    Args:
+        thunk: Async function to execute or options dict with try_ and catch.
+        config: Optional retry configuration with delay and backoff.
+
+    Returns:
+        Result containing value or error.
+
+    Raises:
+        Panic: If catch handler throws.
+
+    Example:
+        >>> await safe_async(lambda: fetch(url))
+        Ok(...)
+        >>> await safe_async(
+        ...     lambda: fetch(url),
+        ...     {"retry": {"times": 3, "delay_ms": 100, "backoff": "exponential"}}
+        ... )
+    """
     async def execute() -> Result[A, E] | Result[A, UnhandledException]:
         if callable(thunk):
             try:
