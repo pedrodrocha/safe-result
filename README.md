@@ -156,9 +156,6 @@ value = result_err.match({
     "err": fn[ValueError, int](lambda e: 0),
 })
 ```
-## Generator Composition
-
-*TODO: Coming soon*
 
 ## Panic
 
