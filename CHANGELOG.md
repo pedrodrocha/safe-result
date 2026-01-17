@@ -4,6 +4,8 @@
 
 ### Added
 
+- `Result.gen()` method for generator-based Result composition (do-notation).
+
 ### Changed
 
 ## Fixed
