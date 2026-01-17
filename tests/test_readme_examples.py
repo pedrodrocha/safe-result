@@ -222,11 +222,9 @@ class TestUnhandledException:
     def test_custom_error_handler(self) -> None:
         class ParseError(TaggedError):
             TAG = "ParseError"
-            __slots__ = ("cause",)
 
             def __init__(self, cause: Exception) -> None:
                 super().__init__(f"Parse failed: {str(cause)}")
-                self.cause = cause
 
         def parse_json(input: str) -> dict[str, str]:
             return json.loads(input)
@@ -260,21 +258,15 @@ class TestTaggedErrors:
 
         result_err = Result.err(ValidationError("name"))
 
-        def handle_validation_error(
-            e: ValidationError,
-        ) -> Result[dict[str, str], ValidationError]:
-            return Result.ok({"message": f"Invalid: {e.field}"})
-
-        def handle_not_found_error(
-            e: NotFoundError,
-        ) -> Result[dict[str, str], NotFoundError]:
-            return Result.ok({"name": "Default User"})
-
         result_exhaustive = TaggedError.match(
             result_err.unwrap_err(),
             {
-                "ValidationError": handle_validation_error,
-                "NotFoundError": handle_not_found_error,
+                ValidationError: fn[
+                    ValidationError, Result[dict[str, str], ValidationError]
+                ](lambda e: Result.ok({"message": f"Invalid: {e.field}"})),
+                NotFoundError: fn[
+                    NotFoundError, Result[dict[str, str], ValidationError]
+                ](lambda e: Result.ok({"name": "Default User"})),
             },
         )
         assert result_exhaustive.is_ok()
@@ -298,21 +290,15 @@ class TestTaggedErrors:
 
         result_err = Result.err(ValidationError("name"))
 
-        def handle_validation_error(
-            e: ValidationError,
-        ) -> Result[dict[str, str], ValidationError]:
-            return Result.ok({"message": f"Invalid: {e.field}"})
-
-        def handle_not_found_error(
-            e: NotFoundError,
-        ) -> Result[dict[str, str], NotFoundError]:
-            return Result.ok({"name": "Default User"})
-
         result_partial = TaggedError.match_partial(
             result_err.unwrap_err(),
             {
-                "ValidationError": handle_validation_error,
-                "NotFoundError": handle_not_found_error,
+                ValidationError: fn[
+                    ValidationError, Result[dict[str, str], ValidationError]
+                ](lambda e: Result.ok({"message": f"Invalid: {e.field}"})),
+                NotFoundError: fn[
+                    NotFoundError, Result[dict[str, str], ValidationError]
+                ](lambda e: Result.ok({"name": "Default User"})),
             },
             otherwise=fn[TaggedError, Result[dict[str, str], ValidationError]](
                 lambda e: Result.ok({"message": "Unknown error"})

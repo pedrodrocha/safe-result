@@ -1,4 +1,4 @@
-from okresult import TaggedError, UnhandledException
+from okresult import TaggedError, UnhandledException, fn
 from typing import TypeAlias, Union
 
 
@@ -46,10 +46,6 @@ AppError: TypeAlias = Union[
 ]
 
 
-def handle_not_found(e: NotFoundError) -> str:
-    return f"Not found: {e.id}"
-
-
 def handle_validation(e: ValidationError) -> str:
     return f"Invalid field: {e.field}"
 
@@ -62,9 +58,11 @@ def match_app_error(error: AppError) -> str:
     return TaggedError.match(
         error,
         {
-            "NotFoundError": handle_not_found,
-            "ValidationError": handle_validation,
-            "NetworkError": handle_network,
+            NotFoundError: fn[NotFoundError, str](lambda e: f"Not found: {e.id}"),
+            ValidationError: fn[ValidationError, str](
+                lambda e: f"Invalid field: {e.field}"
+            ),
+            NetworkError: fn[NetworkError, str](lambda e: f"Network error: {e.url}"),
         },
     )
 
@@ -77,9 +75,11 @@ def match_app_error_partial(error: TaggedError) -> str:
     return TaggedError.match_partial(
         error,
         {
-            "NotFoundError": handle_not_found,
-            "ValidationError": handle_validation,
-            "NetworkError": handle_network,
+            NotFoundError: fn[NotFoundError, str](lambda e: f"Not found: {e.id}"),
+            ValidationError: fn[ValidationError, str](
+                lambda e: f"Invalid field: {e.field}"
+            ),
+            NetworkError: fn[NetworkError, str](lambda e: f"Network error: {e.url}"),
         },
         handle_otherwise,
     )

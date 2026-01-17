@@ -102,53 +102,56 @@ class TaggedError(ABC, Exception):
     @staticmethod
     def match[A](
         error: "TaggedError",
-        handlers: Dict[str, Callable[..., A]],
+        handlers: Dict[type, Callable[..., A]],
     ) -> A:
-        """Pattern matches on error tag.
+        """Pattern matches on error type.
 
         Args:
             error: TaggedError to match.
-            handlers: Dict mapping tags to handler functions.
+            handlers: Dict mapping error types to handler functions.
 
         Returns:
             Result of matched handler.
 
         Raises:
-            ValueError: If no handler found for error tag.
+            ValueError: If no handler found for error type.
 
         Example:
-            >>> handlers = {"MyError": lambda e: "handled"}
+            >>> class MyError(TaggedError):
+            ...     TAG = "MyError"
+            >>> handlers = {MyError: lambda e: "handled"}
             >>> TaggedError.match(my_error, handlers)
             'handled'
         """
-        tag = error.tag
-        handler = handlers.get(tag)
+        handler = handlers.get(type(error))
         if handler is None:
-            raise ValueError(f"No handler for error tag: {tag}")
+            raise ValueError(f"No handler for error type: {type(error).__name__}")
         return handler(error)
 
     @staticmethod
     def match_partial[A](
         error: "TaggedError",
-        handlers: Dict[str, Callable[..., A]],
+        handlers: Dict[type, Callable[..., A]],
         otherwise: Callable[..., A],
     ) -> A:
-        """Pattern matches on error tag with fallback.
+        """Pattern matches on error type with fallback.
 
         Args:
             error: TaggedError to match.
-            handlers: Dict mapping tags to handler functions.
-            otherwise: Fallback handler for unmatched tags.
+            handlers: Dict mapping error types to handler functions.
+            otherwise: Fallback handler for unmatched types.
 
         Returns:
             Result of matched or fallback handler.
 
         Example:
-            >>> handlers = {"MyError": lambda e: "handled"}
+            >>> class MyError(TaggedError):
+            ...     TAG = "MyError"
+            >>> handlers = {MyError: lambda e: "handled"}
             >>> TaggedError.match_partial(error, handlers, lambda e: "fallback")
+            'handled'
         """
-        tag = error.tag
-        handler = handlers.get(tag)
+        handler = handlers.get(type(error))
         if handler is None:
             return otherwise(error)
         return handler(error)

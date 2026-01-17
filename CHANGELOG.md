@@ -1,6 +1,6 @@
 # Change Log
 
-## [v0.2.0] - yyyy-mm-dd
+## [v0.2.0] - 2026-01-17
   
 ### Added
 
@@ -14,5 +14,7 @@
 - Match handlers are now wrapped with try/panic to catch exceptions and signal defects
 - All async transformation functions use proper `Awaitable` type hints for callbacks
 - `is_ok()` and `is_err()` are now concrete implementations in the base `Result` class using the `status` property
+- `TaggedError` subclasses require `TAG` class attribute instead of `tag` property
+- `TaggedError.match()` and `match_partial()` now use type-based pattern matching with error classes as keys instead of string tags.
  
 ### Fixed
