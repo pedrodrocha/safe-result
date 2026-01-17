@@ -15,6 +15,7 @@ from typing import (
     TypeAlias,
     NoReturn,
     Generator,
+    AsyncGenerator,
 )
 from abc import ABC, abstractmethod
 
@@ -221,6 +222,97 @@ class Result(Generic[A, E], ABC):
                 raise  # Re-raise Panic as-is
             panic("Exception in generator", e)
 
+    @staticmethod
+    async def gen_async[GenA, GenE](
+        fn: Callable[..., AsyncGenerator["Result[object, Any]", Any]],
+        context: object | None = None,
+    ) -> "Result[object, Any] | None":
+        """Async generator-based Result composition (do-notation).
+
+        Composes multiple Results sequentially, short-circuiting on first Err.
+        Collects error types from all yields into a union type.
+
+        Args:
+            fn: Async generator function that yields Results.
+            context: Optional context object to bind as 'self' to the generator.
+
+        Returns:
+            Final Result from the generator. The preferred pattern is to yield the final Result
+            as the last value. Alternatively, you can pass a Result via StopAsyncIteration.
+
+        Note:
+            Non-empty return statements (e.g., ``return Result.ok(...)``) are not supported
+            as they are a SyntaxError in async generators per `PEP 525 <https://peps.python.org/pep-0525/>`_.
+            Always yield the final Result as the last value in your generator function.
+
+        Raises:
+            Panic: If generator body throws or doesn't yield a Result as the last value.
+
+        Example:
+            >>> async def compute() -> DoAsync[int, str]:
+            ...     a: int = yield Result.ok(1)
+            ...     b: int = yield Result.err("failed")
+            ...     # Last yielded value will be used (Result.err("failed"))
+            ...     return
+            >>> result = await Result.gen_async(compute)
+            >>> result
+            Err('failed')
+
+            >>> async def compute_with_final_yield() -> DoAsync[int, str]:
+            ...     a: int = yield Result.ok(5)
+            ...     b: int = yield Result.ok(10)
+            ...     # Yield the final result (preferred pattern)
+            ...     yield Result.ok(a + b)
+            >>> result = await Result.gen_async(compute_with_final_yield)
+            >>> result
+            Ok(15)
+        """
+        if context is not None:
+            async_gen = fn.__get__(context, type(context))()
+        else:
+            async_gen = fn()
+
+        last_yielded: "Result[object, Any] | None" = None
+
+        def handle_stop(stop: StopAsyncIteration) -> "Result[object, Any]":
+            # StopAsyncIteration stores value in args[0], not a 'value' attribute
+            returned = stop.args[0] if stop.args else None
+            if isinstance(returned, Result):
+                return cast("Result[GenA, Any]", returned)
+            elif returned is not None:
+                panic("StopAsyncIteration must contain a Result value")
+            elif isinstance(last_yielded, Result):
+                return cast("Result[GenA, Any]", last_yielded)
+            else:
+                panic("Async generator function must yield a Result as the last value")
+
+        try:
+            yielded = await anext(async_gen)
+            last_yielded = yielded
+
+            while True:
+                if yielded.is_err():
+                    try:
+                        await async_gen.aclose()
+                    except BaseException as cleanup_error:
+                        panic("Async generator cleanup threw", cleanup_error)
+                    return cast("Result[object, Any] | None", yielded)
+
+                yielded = await async_gen.asend(yielded.unwrap())
+                last_yielded = yielded
+
+        except RuntimeError as e:
+            if isinstance(e.__cause__, StopAsyncIteration):
+                return handle_stop(e.__cause__)
+            raise
+
+        except BaseException as e:
+            if isinstance(e, StopAsyncIteration):
+                return handle_stop(e)
+            if isinstance(e, Panic):
+                raise
+            panic("Exception in async generator", e)
+
     def is_ok(self) -> bool:
         """Returns True if result is Ok.
 
@@ -396,6 +488,29 @@ Example:
     15
 """
 type Do[T, E] = Generator[Result[Any, E], Any, Result[T, E]]
+
+
+"""
+Type alias for async generator-based Result composition.
+
+Use this type to annotate async generator functions that work with Result.gen_async() for
+do-notation style error handling.
+
+Type Parameters:
+    T: The success value type of the final returned Result
+    E: The error type that can be yielded or returned throughout the computation
+
+Note: The yield and asend types are internally typed as Any because async generator functions can yield Results of different success types (e.g., Result[int, E], Result[str, E]) and receive different unwrapped values in the same computation.
+
+Example:
+    >>> async def compute() -> DoAsync[int, str]:
+    ...     x: int = yield Result.ok(5)
+    ...     y: int = yield Result.ok(10)
+    ...     return Result.ok(x + y)
+    >>> await Result.gen_async(compute).unwrap()
+    15
+"""
+type DoAsync[T, E] = AsyncGenerator[Result[Any, E], Any]
 
 
 class Ok(Result[A, E]):

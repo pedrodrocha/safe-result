@@ -15,6 +15,7 @@ from okresult import (
     match,
     Panic,
     Do,
+    DoAsync,
     TaggedError,
 )
 import pytest
@@ -1182,3 +1183,261 @@ class TestResult:
                 cause = cause.cause
             assert isinstance(cause, ValueError)
             assert str(cause) == "cleanup failed on success"
+
+    class TestGenAsync:
+        @pytest.mark.asyncio
+        async def test_composes_multiple_results(self) -> None:
+            async def parse_int(value: str) -> Result[int, str]:
+                await asyncio.sleep(0.001)  # Simulate async work
+                if value.isdigit():
+                    return Result.ok(int(value))
+                return Result.err(f"Cannot parse '{value}' as int")
+
+            async def divide(a: int, b: int) -> Result[float, str]:
+                await asyncio.sleep(0.001)  # Simulate async work
+                if b == 0:
+                    return Result.err("Division by zero")
+                return Result.ok(a / b)
+
+            async def compute() -> DoAsync[float, str]:
+                a: int = yield await parse_int("10")
+                b: int = yield await parse_int("2")
+                c: float = yield await divide(a, b)
+
+                yield Result.ok(c)
+
+            result = await Result.gen_async(compute)
+            assert result is not None
+            assert result.is_ok()
+            assert result.unwrap() == 5.0
+
+        @pytest.mark.asyncio
+        async def test_short_circuits_on_first_err(self) -> None:
+            async def parse_int(value: str) -> Result[int, str]:
+                await asyncio.sleep(0.001)
+                return Result.err("Cannot parse")
+
+            async def divide(a: int, b: int) -> Result[float, str]:
+                await asyncio.sleep(0.001)
+                return Result.ok(a / b)
+
+            async def compute() -> DoAsync[float, str]:
+                a: int = yield await parse_int("5")
+                b: int = yield await parse_int("10")
+                c: float = yield await divide(a, b)
+
+                yield Result.ok(c)
+
+            result = await Result.gen_async(compute)
+            assert result is not None
+            assert result.is_err()
+            assert result.unwrap_err() == "Cannot parse"
+
+        @pytest.mark.asyncio
+        async def test_panics_when_computation_throws_during_execution(self) -> None:
+            async def parse_int(value: str) -> Result[int, str]:
+                await asyncio.sleep(0.001)
+                return Result.ok(int(value))
+
+            async def divide(a: int, b: int) -> Result[float, str]:
+                await asyncio.sleep(0.001)
+                return Result.ok(a / b)
+
+            async def compute() -> DoAsync[float, str]:
+                a: int = yield await parse_int("1")
+                b: int = yield await parse_int("0")
+                c: float = yield await divide(a, b)  # Division by zero throws here
+                yield Result.ok(c)
+
+            with pytest.raises(Panic):
+                await Result.gen_async(compute)
+
+        @pytest.mark.asyncio
+        async def test_collects_error_types_from_yields(self) -> None:
+            class ErrorA(TaggedError):
+                TAG: str = "ErrorA"
+
+            class ErrorB(TaggedError):
+                TAG: str = "ErrorB"
+
+            async def get_a() -> Result[int, ErrorA]:
+                await asyncio.sleep(0.001)
+                return Result.ok(1)
+
+            async def get_b() -> Result[int, ErrorB]:
+                await asyncio.sleep(0.001)
+                return Result.err(ErrorB("b failed"))
+
+            async def compute() -> DoAsync[float, Union[ErrorA, ErrorB]]:
+                _a: int = yield await get_a()
+                b: int = yield await get_b()
+                yield Result.ok(b)
+
+            result = await Result.gen_async(compute)
+            assert result is not None
+            assert result.is_err()
+            assert isinstance(result.unwrap_err(), ErrorB)
+
+        @pytest.mark.asyncio
+        async def test_supports_context_binding(self) -> None:
+            class Context:
+                multiplier: int = 10
+
+            ctx = Context()
+
+            async def compute(self: Context) -> DoAsync[int, Never]:
+                a: int = yield Result.ok(5)
+                await asyncio.sleep(0.001)
+                # Yield the final result so it's used as the return value
+                yield Result.ok(a * self.multiplier)
+
+            result = await Result.gen_async(compute, ctx)
+            assert result is not None
+            assert result.is_ok()
+            assert result.unwrap() == 50
+
+        @pytest.mark.asyncio
+        async def test_runs_finally_blocks_when_short_circuiting(self) -> None:
+            finally_called = False
+
+            async def get_a() -> Result[int, str]:
+                await asyncio.sleep(0.001)
+                return Result.err("a failed")
+
+            async def compute() -> DoAsync[float, str]:
+                try:
+                    yield await get_a()
+                    return
+                finally:
+                    nonlocal finally_called
+                    finally_called = True
+
+            result = await Result.gen_async(compute)
+            assert result is not None
+            assert result.is_err()
+            assert finally_called is True
+
+        @pytest.mark.asyncio
+        async def test_runs_finally_blocks_on_success_path(self) -> None:
+            finally_called = False
+
+            async def compute() -> DoAsync[int, Never]:
+                try:
+                    a: int = yield Result.ok(1)
+                    await asyncio.sleep(0.001)
+                    # Yield the final result
+                    yield Result.ok(a + 1)
+                    return
+                finally:
+                    nonlocal finally_called
+                    finally_called = True
+
+            result = await Result.gen_async(compute)
+            assert result is not None
+            assert result.is_ok()
+            assert result.unwrap() == 2
+            assert finally_called is True
+
+        @pytest.mark.asyncio
+        async def test_panics_when_finally_block_throws_on_error_path(self) -> None:
+            async def compute() -> DoAsync[float, str]:
+                try:
+                    yield Result.err("original error")
+                    return
+                finally:
+                    raise ValueError("cleanup failed")
+
+            with pytest.raises(Panic) as exc_info:
+                await Result.gen_async(compute)
+            assert "Exception in async generator" in str(
+                exc_info.value
+            ) or "Async generator cleanup threw" in str(exc_info.value)
+            cause = exc_info.value.cause
+            if isinstance(cause, Panic):
+                cause = cause.cause
+            assert isinstance(cause, ValueError)
+            assert str(cause) == "cleanup failed"
+
+        @pytest.mark.asyncio
+        async def test_panics_when_generator_body_throws_before_yield(self) -> None:
+            async def compute() -> DoAsync[float, str]:
+                raise ValueError("threw before yield")
+                yield Result.ok(1)  # unreachable, to make it a generator
+
+            with pytest.raises(Panic) as exc_info:
+                await Result.gen_async(compute)
+            assert "Exception in async generator" in str(exc_info.value)
+            assert isinstance(exc_info.value.cause, ValueError)
+            assert str(exc_info.value.cause) == "threw before yield"
+
+        @pytest.mark.asyncio
+        async def test_panics_when_finally_block_throws_on_success_path(self) -> None:
+            async def compute() -> DoAsync[float, str]:
+                try:
+                    return
+                finally:
+                    raise ValueError("cleanup failed on success")
+                yield Result.ok(0)  # unreachable, to make it a generator
+
+            with pytest.raises(Panic) as exc_info:
+                await Result.gen_async(compute)
+
+            assert "Async generator cleanup threw" in str(
+                exc_info.value
+            ) or "Exception in async generator" in str(exc_info.value)
+            cause = exc_info.value.cause
+            if isinstance(cause, Panic):
+                cause = cause.cause
+            assert isinstance(cause, ValueError)
+            assert str(cause) == "cleanup failed on success"
+
+        @pytest.mark.asyncio
+        async def test_supports_result_await_helper(self) -> None:
+            async def async_fetch(value: int) -> Result[int, str]:
+                await asyncio.sleep(0.001)
+                if value > 0:
+                    return Result.ok(value * 2)
+                return Result.err("Invalid value")
+
+            async def compute() -> DoAsync[float, str]:
+                # Use Result.await_() to wrap Promise<Result>
+                a: int = yield await Result.await_(async_fetch(5))
+                b: int = yield await Result.await_(async_fetch(10))
+                raise StopAsyncIteration(Result.ok(a + b))
+
+            result = await Result.gen_async(compute)
+            assert result is not None
+            assert result.is_ok()
+            assert result.unwrap() == 30  # (5*2) + (10*2) = 10 + 20 = 30
+
+        @pytest.mark.asyncio
+        async def test_supports_mixed_sync_and_async_results(self) -> None:
+            async def async_fetch(value: int) -> Result[int, str]:
+                await asyncio.sleep(0.001)
+                return Result.ok(value)
+
+            async def compute() -> DoAsync[float, str]:
+                a: int = yield Result.ok(1)
+                b: int = yield await async_fetch(2)
+                c: int = yield Result.ok(3)
+                raise StopAsyncIteration(Result.ok(a + b + c))
+
+            result = await Result.gen_async(compute)
+            assert result is not None
+            assert result.is_ok()
+            assert result.unwrap() == 6
+
+        @pytest.mark.asyncio
+        async def test_supports_returning_result_via_stop_async_iteration(self) -> None:
+
+            async def compute() -> DoAsync[int, str]:
+                a: int = yield Result.ok(5)
+                b: int = yield Result.ok(10)
+                # Python async generators can't use 'return Result.ok(...)', but we can
+                # raise StopAsyncIteration with the value, which is what the implementation supports
+                raise StopAsyncIteration(Result.ok(a + b))
+
+            result = await Result.gen_async(compute)
+            assert result is not None
+            assert result.is_ok()
+            assert result.unwrap() == 15

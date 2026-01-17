@@ -16,6 +16,7 @@ from .result import (
     and_then_async,
     match,
     Do,
+    DoAsync,
 )
 
 from .safe import (
@@ -39,6 +40,8 @@ __all__ = [
     "Ok",
     "Result",
     "Matcher",
+    "Do",
+    "DoAsync",
     # Result functions
     "map",
     "map_err",
