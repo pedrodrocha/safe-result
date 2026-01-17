@@ -1403,7 +1403,7 @@ class TestResult:
                 # Await async functions directly - no wrapper needed
                 a: int = yield await async_fetch(5)
                 b: int = yield await async_fetch(10)
-                raise StopAsyncIteration(Result.ok(a + b))
+                yield Result.ok(a + b)
 
             result = await Result.gen_async(compute)
             assert result is not None
@@ -1420,7 +1420,7 @@ class TestResult:
                 a: int = yield Result.ok(1)
                 b: int = yield await async_fetch(2)
                 c: int = yield Result.ok(3)
-                raise StopAsyncIteration(Result.ok(a + b + c))
+                yield Result.ok(a + b + c)
 
             result = await Result.gen_async(compute)
             assert result is not None
@@ -1428,16 +1428,13 @@ class TestResult:
             assert result.unwrap() == 6
 
         @pytest.mark.asyncio
-        async def test_supports_returning_result_via_stop_async_iteration(self) -> None:
-
+        async def test_panics_when_stop_async_iteration_raised_with_value(self) -> None:
             async def compute() -> DoAsync[int, str]:
                 a: int = yield Result.ok(5)
                 b: int = yield Result.ok(10)
-                # Python async generators can't use 'return Result.ok(...)', but we can
-                # raise StopAsyncIteration with the value, which is what the implementation supports
+                # Raising StopAsyncIteration with a value is not supported
                 raise StopAsyncIteration(Result.ok(a + b))
 
-            result = await Result.gen_async(compute)
-            assert result is not None
-            assert result.is_ok()
-            assert result.unwrap() == 15
+            with pytest.raises(Panic) as exc_info:
+                await Result.gen_async(compute)
+            assert "must yield the final Result" in str(exc_info.value)

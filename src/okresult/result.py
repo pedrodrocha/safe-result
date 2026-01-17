@@ -223,13 +223,14 @@ class Result(Generic[A, E], ABC):
             context: Optional context object to bind as 'self' to the generator.
 
         Returns:
-            Final Result from the generator. The preferred pattern is to yield the final Result
-            as the last value. Alternatively, you can pass a Result via StopAsyncIteration.
+            Final Result from the generator. The generator must yield the final Result
+            as the last value.
 
         Note:
             Non-empty return statements (e.g., ``return Result.ok(...)``) are not supported
             as they are a SyntaxError in async generators per `PEP 525 <https://peps.python.org/pep-0525/>`_.
             Always yield the final Result as the last value in your generator function.
+            Raising ``StopAsyncIteration`` with a value is not supported and will panic.
 
         Raises:
             Panic: If generator body throws or doesn't yield a Result as the last value.
@@ -247,7 +248,7 @@ class Result(Generic[A, E], ABC):
             >>> async def compute_with_final_yield() -> DoAsync[int, str]:
             ...     a: int = yield Result.ok(5)
             ...     b: int = yield Result.ok(10)
-            ...     # Yield the final result (preferred pattern)
+            ...     # Must yield the final result
             ...     yield Result.ok(a + b)
             >>> result = await Result.gen_async(compute_with_final_yield)
             >>> result
@@ -258,20 +259,19 @@ class Result(Generic[A, E], ABC):
         else:
             async_gen = fn()
 
-        last_yielded: "Result[object, Any] | None" = None
 
         def handle_stop(stop: StopAsyncIteration) -> "Result[object, Any]":
-            # StopAsyncIteration stores value in args[0], not a 'value' attribute
-            returned = stop.args[0] if stop.args else None
-            if isinstance(returned, Result):
-                return cast("Result[GenA, Any]", returned)
-            elif returned is not None:
-                panic("StopAsyncIteration must contain a Result value")
-            elif isinstance(last_yielded, Result):
+            # If StopAsyncIteration was raised with a value, that's not supported - panic
+            if stop.args:
+                panic("Async generators must yield the final Result as the last value; StopAsyncIteration with a value is not supported.")
+            # Generator ended (plain return), use last yielded value
+            if isinstance(last_yielded, Result):
                 return cast("Result[GenA, Any]", last_yielded)
             else:
-                panic("Async generator function must yield a Result as the last value")
-
+                panic("Async generator function must yield the final Result as the last value.")
+        
+        last_yielded: "Result[object, Any] | None" = None
+        
         try:
             yielded = await anext(async_gen)
             last_yielded = yielded
