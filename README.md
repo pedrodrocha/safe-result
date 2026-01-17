@@ -125,12 +125,9 @@ def fetch_user(id: str) -> Result[dict[str, str], NotFoundError]:
         return Result.ok({"name": "John", "id": id})
     return Result.err(NotFoundError(id))
 
-def recover_from_not_found(e: NotFoundError) -> Result[dict[str, str], NotFoundError]:
-    return Result.ok({"name": "Default User"})
-
 result = fetch_user("123").match({
     "ok": fn[dict[str, str], Result[dict[str, str], NotFoundError]](lambda user: Result.ok(user)),  # Pass through success
-    "err": fn[NotFoundError, Result[dict[str, str], NotFoundError]](lambda e: recover_from_not_found(e) if e.tag == "NotFoundError" else Result.err(e))
+    "err": fn[NotFoundError, Result[dict[str, str], NotFoundError]](lambda e: Result.ok({"name": "Default User"}))
 })
 
 
