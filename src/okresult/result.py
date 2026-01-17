@@ -50,9 +50,6 @@ Type variable for a generic type G, contravariant
 """
 G = TypeVar("G", contravariant=True)
 
-# Type variables for Result.do
-A_do = TypeVar("A_do")
-E_do = TypeVar("E_do")
 
 """
 Type variable for a transformed generic error type F
@@ -140,9 +137,31 @@ class Result(Generic[A, E], ABC):
         return Err(value)
 
     @staticmethod
-    def gen(
-        fn: Callable[[], Generator["Result[Any, E]", Any, "Result[A, E]"]],
-    ) -> "Result[A, E]":
+    def gen[GenA, GenE](
+        fn: Callable[[], Generator["Result[object, Any]", Any, "Result[GenA, GenE]"]],
+    ) -> "Result[GenA, Any]":
+        """Generator-based Result composition (do-notation).
+
+        Composes multiple Results sequentially, short-circuiting on first Err.
+        Collects error types from all yields into a union type.
+
+        Args:
+            fn: Generator function that yields Results and returns a Result.
+
+        Returns:
+            Final Result with union of all error types from yields and return.
+
+        Raises:
+            Panic: If generator body throws or doesn't return a Result.
+
+        Example:
+            >>> def compute() -> Do[int, str | int]:
+            ...     a: int = yield Result.ok(1)
+            ...     b: int = yield Result.err("failed")
+            ...     return Result.ok(a + b)
+            >>> Result.gen(compute)
+            Err('failed')
+        """
         gen = fn()
 
         try:
@@ -152,7 +171,7 @@ class Result(Generic[A, E], ABC):
             while True:
                 if yielded.is_err():
                     # short-circuit immediately
-                    return cast("Err[Never, E]", yielded)
+                    return cast("Result[GenA, Any]", yielded)
 
                 # unwrap Ok and send value back
                 yielded = gen.send(yielded.unwrap())
@@ -161,7 +180,7 @@ class Result(Generic[A, E], ABC):
             returned = stop.value
             if not isinstance(returned, Result):
                 panic("Generator function must return a Result")
-            return cast("Result[A, E]", returned)
+            return cast("Result[GenA, Any]", returned)
         except BaseException as e:
             # Generator body threw - this is a programming error
             panic("Exception in generator", e)

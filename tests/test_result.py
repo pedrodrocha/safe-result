@@ -1,4 +1,4 @@
-from typing import Never
+from typing import Never, Union
 from okresult import (
     Result,
     Ok,
@@ -14,6 +14,7 @@ from okresult import (
     match,
     Panic,
     Do,
+    TaggedError,
 )
 import pytest
 
@@ -974,7 +975,7 @@ class TestResult:
             assert str(error) == "Not an int"
 
     class TestGen:
-        def test_successfull_computation(self) -> None:
+        def test_composes_multiple_results(self) -> None:
             def parse_int(value: str) -> Result[int, str]:
                 if value.isdigit():
                     return Result.ok(int(value))
@@ -993,7 +994,7 @@ class TestResult:
 
             assert Result.gen(compute).unwrap() == 5.0
 
-        def test_short_circuits_on_error(self) -> None:
+        def test_short_circuits_on_first_err(self) -> None:
             def parse_int(value: str) -> Result[int, str]:
                 return Result.err("Cannot parse")
 
@@ -1008,7 +1009,7 @@ class TestResult:
 
             assert Result.gen(compute).unwrap_err() == "Cannot parse"
 
-        def test_panics_on_exception_during_execution(self) -> None:
+        def test_panics_on_body_execution_before_yield(self) -> None:
             def parse_int(value: str) -> Result[int, str]:
                 return Result.ok(int(value))
 
@@ -1023,3 +1024,25 @@ class TestResult:
 
             with pytest.raises(Panic):
                 Result.gen(compute)
+
+        def test_collects_error_types_from_yields(self) -> None:
+            class ErrorA(TaggedError):
+                TAG: str = "ErrorA"
+
+            class ErrorB(TaggedError):
+                TAG: str = "ErrorB"
+
+            def get_a() -> Result[int, ErrorA]:
+                return Result.ok(1)
+
+            def get_b() -> Result[int, ErrorB]:
+                return Result.err(ErrorB("b failed"))
+
+            def compute() -> Do[int, Union[ErrorA, ErrorB]]:
+                a: int = yield get_a()
+                b: int = yield get_b()
+                return Result.ok(a + b)
+
+            result = Result.gen(compute)
+            assert result.is_err()
+            assert isinstance(result.unwrap_err(), ErrorB)
