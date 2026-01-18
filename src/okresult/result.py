@@ -16,6 +16,7 @@ from typing import (
     NoReturn,
     Generator,
     AsyncGenerator,
+    Iterable,
 )
 from abc import ABC, abstractmethod
 
@@ -493,6 +494,39 @@ class Result(Generic[A, E], ABC):
         if Result.is_result(unwrapped):
             return cast("Result[FLAT_A, FLAT_E]", unwrapped)
         return cast("Result[FLAT_A, FLAT_E]", result)
+
+    @staticmethod
+    def partition[PART_A, PART_E](
+        results: Iterable["Result[PART_A, PART_E]"],
+    ) -> tuple[list[PART_A], list[PART_E]]:
+        """Partitions an iterable of Results into separate lists of ok and err values.
+
+        Splits a collection of Results into two lists:
+        - First list contains all the ok values
+        - Second list contains all the err values
+
+        Args:
+            results: Iterable of Results to partition.
+
+        Returns:
+            A tuple of (list of ok values, list of err values).
+
+        Example:
+            >>> results = [Result.ok(1), Result.err("error"), Result.ok(2)]
+            >>> successes, failures = Result.partition(results)
+            >>> successes
+            [1, 2]
+            >>> failures
+            ['error']
+        """
+        oks: list[PART_A] = []
+        errs: list[PART_E] = []
+        for result in results:
+            if result.is_ok():
+                oks.append(cast(PART_A, result.unwrap()))
+            else:
+                errs.append(result.unwrap_err())
+        return (oks, errs)
 
     @staticmethod
     def is_result(value: object) -> bool:

@@ -1481,15 +1481,6 @@ class TestResult:
             assert flat.unwrap_err() == "error"
 
         def test_flatten_with_different_error_types(self) -> None:
-            """
-            Tests that flatten works correctly with different error types
-            and that the type system accepts union error types.
-
-            Ok(Ok(value)) -> Ok(value)
-            Ok(Err(value)) -> Err(value)
-            Err(value) -> Err(value)
-            """
-
             class InnerError(TaggedError):
                 TAG: str = "InnerError"
 
@@ -1510,3 +1501,71 @@ class TestResult:
 
             assert flat2.unwrap_err().tag == "InnerError"
             assert flat3.unwrap_err().tag == "OuterError"
+
+    class TestPartition:
+        def test_partitions_oks_and_errs(self) -> None:
+            results = [Result.ok(1), Result.err("a"), Result.ok(2), Result.err("b")]
+            successes, failures = Result.partition(results)
+
+            assert successes == [1, 2]
+            assert failures == ["a", "b"]
+
+        def test_partitions_preserves_order(self) -> None:
+            results = [
+                Result.ok(1),
+                Result.err("error1"),
+                Result.ok(2),
+                Result.err("error2"),
+                Result.ok(3),
+            ]
+            successes, failures = Result.partition(results)
+
+            assert successes == [1, 2, 3]
+            assert failures == ["error1", "error2"]
+
+        def test_partitions_only_oks(self) -> None:
+            results = [Result.ok(1), Result.ok(2), Result.ok(3)]
+            successes, failures = Result.partition(results)
+
+            assert successes == [1, 2, 3]
+            assert failures == []
+
+        def test_partitions_only_errs(self) -> None:
+            results = [
+                Result.err("error1"),
+                Result.err("error2"),
+                Result.err("error3"),
+            ]
+            successes, failures = Result.partition(results)
+
+            assert successes == []
+            assert failures == ["error1", "error2", "error3"]
+
+        def test_partitions_empty_list(self) -> None:
+            results: list[Result[int, str]] = []
+            successes, failures = Result.partition(results)
+
+            assert successes == []
+            assert failures == []
+
+        def test_partitions_with_different_error_types(self) -> None:
+            class Error1(TaggedError):
+                TAG: str = "Error1"
+
+            class Error2(TaggedError):
+                TAG: str = "Error2"
+
+            results = [
+                Result.ok(42),
+                Result.err(Error1("first error")),
+                Result.ok(100),
+                Result.err(Error2("second error")),
+            ]
+            successes, failures = Result.partition(results)
+            assert isinstance(successes, list)
+            assert isinstance(failures, list)
+
+            assert successes == [42, 100]
+            assert len(failures) == 2
+            assert failures[0].tag == "Error1"
+            assert failures[1].tag == "Error2"
