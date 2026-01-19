@@ -7,6 +7,7 @@
 - `Result.gen()` method for generator-based Result composition (do-notation).
 - `Result.gen_async()` method for async generator-based Result composition (async do-notation).
 - `Result.flatten()` method for flattening nested Results.
+- `Result.partition()` method for partitioning an iterable of Results into separate lists of ok and err values.
 
 ### Changed
 
