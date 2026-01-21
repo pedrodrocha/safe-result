@@ -1,6 +1,6 @@
 [project]
 name = "okresult"
-version = "0.3.0"
+version = "0.4.0"
 description = "A lightweight Result type for Python."
 authors = [{name = "Pedro Rocha", email = "pedro.diniz.rocha@gmail.com"}]
 readme = "README.md"
